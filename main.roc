@@ -18,68 +18,53 @@ solve = |buckets| {
 	var $part_one_total = 0.U64
 	var $min_containers = U64.highest
 	var $part_two_min_counts = Dict.empty()
-	var $known_overshots = []
 	for attempt in 0..<n_attempts {
-		var $skip = Bool.False
-		for overshot in $known_overshots {
-			hit = overshot.bitwise_and(attempt) == overshot
-			if hit {
-				$skip = Bool.True
-				break
+		var $lo_mask = U8x16.default()
+		var $lo_containers = 0
+		for bit in 0..<16 {
+			should_include_bucket = attempt.shr_wrap(bit).bitwise_and(1) == 1
+			if should_include_bucket {
+				$lo_containers = $lo_containers + 1
+			}
+			include_lane = if should_include_bucket U8.highest else 0
+			$lo_mask = $lo_mask.with_lane(bit.to_u64(), include_lane)
+		}
+
+		var $hi_mask = U8x16.default()
+		var $hi_containers = 0
+		for bit in 0..<16 {
+			should_include_bucket = attempt.shr_wrap(bit + 16).bitwise_and(1) == 1
+			if should_include_bucket {
+				$hi_containers = $hi_containers + 1
+			}
+			include_lane = if should_include_bucket U8.highest else 0
+			$hi_mask = $hi_mask.with_lane(bit.to_u64(), include_lane)
+		}
+
+		masked_lo = $lo_mask.bit_select(buckets.lo, U8x16.default())
+		masked_hi = $hi_mask.bit_select(buckets.hi, U8x16.default())
+
+		lo_sum = masked_lo.sum_lanes()
+		hi_sum = masked_hi.sum_lanes()
+		sum = lo_sum + hi_sum
+
+		if sum == 150 {
+			$part_one_total = $part_one_total + 1
+			containers = $hi_containers + $lo_containers
+			if containers < $min_containers {
+				$min_containers = containers
+			}
+			if containers == $min_containers {
+				$part_two_min_counts = $part_two_min_counts.update(
+					containers,
+					|entry| match entry {
+						Ok(found) => Ok(found + 1)
+						Err(Missing) => Ok(1.U64)
+					},
+				)
 			}
 		}
 
-		if !$skip {
-			var $lo_mask = U8x16.default()
-			var $lo_containers = 0
-			for bit in 0..<16 {
-				should_include_bucket = attempt.shr_wrap(bit).bitwise_and(1) == 1
-				if should_include_bucket {
-					$lo_containers = $lo_containers + 1
-				}
-				include_lane = if should_include_bucket U8.highest else 0
-				$lo_mask = $lo_mask.with_lane(bit.to_u64(), include_lane)
-			}
-
-			var $hi_mask = U8x16.default()
-			var $hi_containers = 0
-			for bit in 0..<16 {
-				should_include_bucket = attempt.shr_wrap(bit + 16).bitwise_and(1) == 1
-				if should_include_bucket {
-					$hi_containers = $hi_containers + 1
-				}
-				include_lane = if should_include_bucket U8.highest else 0
-				$hi_mask = $hi_mask.with_lane(bit.to_u64(), include_lane)
-			}
-
-			masked_lo = $lo_mask.bit_select(buckets.lo, U8x16.default())
-			masked_hi = $hi_mask.bit_select(buckets.hi, U8x16.default())
-
-			lo_sum = masked_lo.sum_lanes()
-			hi_sum = masked_hi.sum_lanes()
-			sum = lo_sum + hi_sum
-
-			if sum == 150 {
-				$part_one_total = $part_one_total + 1
-				containers = $hi_containers + $lo_containers
-				if containers < $min_containers {
-					$min_containers = containers
-				}
-				if containers == $min_containers {
-					$part_two_min_counts = $part_two_min_counts.update(
-						containers,
-						|entry| match entry {
-							Ok(found) => Ok(found + 1)
-							Err(Missing) => Ok(1.U64)
-						},
-					)
-				}
-			}
-
-			if sum > 150 {
-				$known_overshots = $known_overshots.append(attempt)
-			}
-		}
 	}
 
 	part_two_count = match $part_two_min_counts.get($min_containers) {

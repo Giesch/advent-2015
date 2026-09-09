@@ -5,4 +5,4 @@ build:
     roc build --opt=speed
 
 test:
-    roc --no-color test
+    roc test

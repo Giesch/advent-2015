@@ -1,7 +1,11 @@
 import "./input.txt" as puzzle_input : Str
 
+## The puzzle input, converted into two SIMD vectors
+Buckets : { hi : U8x16, lo : U8x16, len : U64 }
+
 Ok(parsed_nums) = parse_lines(puzzle_input)
 
+main! : List(Str) => Try({}, _)
 main! = |_args| {
 	Ok(buckets) = to_buckets(parsed_nums)
 	{ part_one, part_two } = solve(buckets)
@@ -13,7 +17,7 @@ main! = |_args| {
 }
 
 # the set of single-bit selectors for a byte
-# this lets a lane represent a single input byte from the attempt mask
+# this lets a SIMD lane represent a single input byte from the attempt mask
 powers_of_two = [1, 2, 4, 8, 16, 32, 64, 128]
 
 Ok(weights) = U8x16.from_list(powers_of_two.concat(powers_of_two))
@@ -28,7 +32,7 @@ solve = |buckets| {
 	var $min_containers_used = U64.highest
 	var $num_best_ways = 0
 
-	# convert every number from 0 to 2^20 to a bimask selecting containers,
+	# convert every number from 0 to 2^20 to a bitmask selecting containers,
 	# and sum and the results of each
 	n_attempts = (2.U64).pow(buckets.len)
 	for attempt in 0..<n_attempts {
@@ -67,10 +71,7 @@ solve = |buckets| {
 		}
 	}
 
-	{
-		part_one: $ways_to_150,
-		part_two: $num_best_ways,
-	}
+	{ part_one: $ways_to_150, part_two: $num_best_ways }
 }
 
 parse_lines : Str -> Try(List(U8), _)
@@ -79,9 +80,6 @@ parse_lines = |input|
 		.trim()
 		.split_on("\n")
 		.map_try(|line| U8.from_str(line))
-
-## The puzzle input, converted into two SIMD vectors
-Buckets : { hi : U8x16, lo : U8x16, len : U64 }
 
 to_buckets : List(U8) -> Try(Buckets, _)
 to_buckets = |nums| {

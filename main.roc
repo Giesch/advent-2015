@@ -1,12 +1,12 @@
 import "./input.txt" as puzzle_input : Str
 
+Ok(parsed_nums) = parse_lines(puzzle_input)
+
 main! = |_args| {
-	Ok(nums) = parse_lines(puzzle_input)
+	Ok(buckets) = to_buckets(parsed_nums)
+	{ part_one, part_two } = solve(buckets)
 
-	# Ok(buckets) = to_buckets(nums)
-	# { part_one, part_two } = solve(buckets)
-
-	{ part_one, part_two } = dynamic_programming_solve(nums)
+	# { part_one, part_two } = dynamic_programming_solve(nums)
 
 	echo!("Part One Total: ${part_one.to_str()}\n")
 	echo!("Part Two Count: ${part_two.to_str()}\n")
@@ -16,35 +16,33 @@ main! = |_args| {
 
 solve : Buckets -> { part_one : U64, part_two : U64 }
 solve = |buckets| {
-	n_attempts = (2.U64).pow(buckets.len)
+	# Lane i of weights holds the single bit 1 << (i % 8).
+	powers_of_two = [1, 2, 4, 8, 16, 32, 64, 128]
+	Ok(weights) = U8x16.from_list(powers_of_two.concat(powers_of_two))
+	Ok(upper_half) = U8x16.from_list(List.repeat(0, 8).concat(List.repeat(255, 8)))
+
 	var $part_one_total = 0.U64
 	var $min_containers = U64.highest
 	var $part_two_min_counts = Dict.empty()
+	n_attempts = (2.U64).pow(buckets.len)
 	for attempt in 0..<n_attempts {
-		var $lo_mask = U8x16.default()
-		var $lo_containers = 0
-		for bit in 0..<16 {
-			should_include_bucket = attempt.shr_wrap(bit).bitwise_and(1) == 1
-			if should_include_bucket {
-				$lo_containers = $lo_containers + 1
-			}
-			include_lane = if should_include_bucket U8.highest else 0
-			$lo_mask = $lo_mask.with_lane(bit.to_u64(), include_lane)
-		}
+		# `attempt` is < 2^20, so we break it up into 3 bytes
+		b0 = attempt.to_u8_wrap()
+		b1 = attempt.shr_wrap(8).to_u8_wrap()
+		b2 = attempt.shr_wrap(16).to_u8_wrap()
 
-		var $hi_mask = U8x16.default()
-		var $hi_containers = 0
-		for bit in 0..<16 {
-			should_include_bucket = attempt.shr_wrap(bit + 16).bitwise_and(1) == 1
-			if should_include_bucket {
-				$hi_containers = $hi_containers + 1
-			}
-			include_lane = if should_include_bucket U8.highest else 0
-			$hi_mask = $hi_mask.with_lane(bit.to_u64(), include_lane)
-		}
+		# Broadcast the low bytes of attempt: lanes 0..7 hold b0, lanes 8..15 hold b1.
+		bytes_lo = upper_half.bit_select(U8x16.splat(b1), U8x16.splat(b0))
+		# The `and` isolates one attempt bit per lane.
+		# eq_lanes widens each set bit into an all-ones lane,
+		# so lane i is 255 when bit i of attempt is set.
+		lo_mask = bytes_lo.bitwise_and(weights).eq_lanes(weights)
+		# Lanes 8..15 retest bits 16..23, but buckets.hi is padded zero there.
+		hi_mask = U8x16.splat(b2).bitwise_and(weights).eq_lanes(weights)
 
-		masked_lo = $lo_mask.bit_select(buckets.lo, U8x16.default())
-		masked_hi = $hi_mask.bit_select(buckets.hi, U8x16.default())
+		# Keep a capacity where the mask lane is all ones; put zero elsewhere.
+		masked_lo = lo_mask.bit_select(buckets.lo, U8x16.splat(0))
+		masked_hi = hi_mask.bit_select(buckets.hi, U8x16.splat(0))
 
 		lo_sum = masked_lo.sum_lanes()
 		hi_sum = masked_hi.sum_lanes()
@@ -52,17 +50,12 @@ solve = |buckets| {
 
 		if sum == 150 {
 			$part_one_total = $part_one_total + 1
-			containers = $hi_containers + $lo_containers
-			if containers < $min_containers {
-				$min_containers = containers
-			}
+			containers = attempt.count_one_bits().to_u64()
+			$min_containers = $min_containers.min(containers)
 			if containers == $min_containers {
 				$part_two_min_counts = $part_two_min_counts.update(
 					containers,
-					|entry| match entry {
-						Ok(found) => Ok(found + 1)
-						Err(Missing) => Ok(1.U64)
-					},
+					|entry| Ok(entry.ok_or(0) + 1),
 				)
 			}
 		}

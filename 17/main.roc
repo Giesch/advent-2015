@@ -3,12 +3,11 @@ import "./input.txt" as puzzle_input : Str
 ## The puzzle input, converted into two SIMD vectors
 Buckets : { hi : U8x16, lo : U8x16, len : U64 }
 
-Ok(parsed_nums) = parse_lines(puzzle_input)
-
 main! : List(Str) => Try({}, _)
 main! = |_args| {
-	Ok(buckets) = to_buckets(parsed_nums)
-	{ part_one, part_two } = solve(buckets)
+	Ok(parsed_nums) = parse_lines(puzzle_input)
+	Ok(parsed_buckets) = to_buckets(parsed_nums)
+	{ part_one, part_two } = solve(parsed_buckets)
 
 	echo!("Part One Total: ${part_one.to_str()}\n")
 	echo!("Part Two Count: ${part_two.to_str()}\n")

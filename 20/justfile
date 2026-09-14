@@ -1,5 +1,8 @@
 watch:
     watchexec --clear=clear roc main.roc
 
-build: 
+build:
     roc build --opt=speed
+
+attempt: build
+    ./main 29000000

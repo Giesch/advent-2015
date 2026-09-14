@@ -74,11 +74,12 @@ solve = |buckets| {
 }
 
 parse_lines : Str -> Try(List(U8), _)
-parse_lines = |input|
+parse_lines = |input| {
 	input
 		.trim()
 		.split_on("\n")
 		.map_try(|line| U8.from_str(line))
+}
 
 to_buckets : List(U8) -> Try(Buckets, _)
 to_buckets = |nums| {

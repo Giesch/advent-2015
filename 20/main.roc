@@ -1,14 +1,11 @@
 # puzzle_input = 29_000_000.U64
 
-# puzzle_input = 50.U64
-
 main! : List(Str) => Try({}, _)
 main! = |args| {
 	input_str = args.get(0) ? MissingArg
 	input = U64.from_str(input_str) ? NonNumberArg
 
-	part_one = third(input)
-	# part_one = 1
+	part_one = fourth(input)
 
 	echo!("Part One: ${part_one.to_str()}\n")
 
@@ -17,7 +14,7 @@ main! = |args| {
 
 first : U64 -> U64
 first = |input| {
-	max_sum_of_factors = input.div_by(10)
+	max_sum_of_factors = input / 10
 
 	var $sums = List.repeat(0, max_sum_of_factors)
 	var $current_best = max_sum_of_factors
@@ -180,6 +177,77 @@ third = |input| {
 	max_sum_of_factors
 }
 
+fourth : U64 -> U64
+fourth = |input| {
+	max_sum_of_factors = input / 10
+
+	lower_bound : U64
+	lower_bound = {
+		list = List.from_iter(
+			harmonic_series
+				.with_index()
+				.drop_if(|(_index, sum)| sum < max_sum_of_factors)
+				.map(|(index, _sum)| index)
+				.take_first(1),
+		)
+
+		match list.first() {
+			Ok(sum) => sum
+			_ => crash "oops"
+		}
+	}
+
+	var $sums = List.repeat(0, max_sum_of_factors)
+	var $current_best = max_sum_of_factors
+	for elf in 1..<max_sum_of_factors {
+		if elf > $current_best break
+
+		# first multiple past the lower bound
+		var $house = ((lower_bound + elf - 1) / elf) * elf
+
+		while $house < $current_best {
+			sum = $sums.get($house).ok_or(0) + elf
+			$sums = match $sums.set($house, sum) {
+				Ok(sums) => sums
+				Err(OutOfBounds) => crash "oops"
+			}
+
+			if sum >= max_sum_of_factors {
+				$current_best = $current_best.min($house)
+			}
+
+			$house = $house + elf
+		}
+	}
+
+	var $house = 0.U64
+	while $house < $current_best {
+		sum = $sums.get($house).ok_or(0)
+		if sum >= max_sum_of_factors {
+			break
+		}
+
+		$house = $house + 1
+	}
+
+	$house
+}
+
+harmonic_series = {
+	start = { sum: 0.U64, n: 0.U64 }
+
+	advance = |state| {
+		n = state.n + 1
+		sum = state.sum + state.n
+
+		Ok((sum, { sum, n }))
+	}
+
+	Iter.custom(start, Unknown, advance)
+}
+
+expect harmonic_series.take_first(5).collect() == [0, 1, 3, 6, 10]
+
 expect first(10) == 1
 expect first(70) == 4
 expect first(50) == 4
@@ -194,3 +262,8 @@ expect third(10) == 1
 expect third(70) == 4
 expect third(50) == 4
 expect third(120) == 6
+
+expect fourth(10) == 1
+expect fourth(70) == 4
+expect fourth(50) == 4
+expect fourth(120) == 6

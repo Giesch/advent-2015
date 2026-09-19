@@ -1,209 +1,68 @@
-# puzzle_input = 29_000_000.U64
+
 
 main! : List(Str) => Try({}, _)
 main! = |args| {
 	input_str = args.get(0) ? MissingArg
 	input = U64.from_str(input_str) ? NonNumberArg
 
-	part_one = fourth(input)
+	part_one = solve_part_one(input)
+	part_two = solve_part_two(input)
 
 	echo!("Part One: ${part_one.to_str()}\n")
+	echo!("Part Two: ${part_two.to_str()}\n")
 
 	Ok({})
 }
 
-first : U64 -> U64
-first = |input| {
-	max_sum_of_factors = input / 10
+solve_part_one : U64 -> U64
+solve_part_one = |input| {
+	presents_multiple = 10
+	delivery_limit = Err(None)
 
-	var $sums = List.repeat(0, max_sum_of_factors)
-	var $current_best = max_sum_of_factors
-	for elf in 1..<max_sum_of_factors {
-		for house in elf..<$current_best {
-			to_add = if house.is_multiple_of(elf) elf else 0
-			sum = $sums.get(house).ok_or(0) + to_add
-			$sums = $sums.set(house, sum).ok_or($sums)
-			if sum >= max_sum_of_factors {
-				$current_best = $current_best.min(house)
-			}
-		}
-	}
-
-	var $house = 0.U64
-	while $house < $current_best {
-		sum = $sums.get($house).ok_or(0)
-		if sum >= max_sum_of_factors {
-			break
-		}
-
-		$house = $house + 1
-	}
-
-	$house
+	solve({ input, presents_multiple, delivery_limit })
 }
 
-second : U64 -> U64
-second = |input| {
-	max_sum_of_factors = input.div_by(10)
+solve_part_two : U64 -> U64
+solve_part_two = |input| {
+	presents_multiple = 11
+	delivery_limit = Ok(50)
 
-	var $factors_by_index = List.repeat(Set.empty(), max_sum_of_factors)
-	for i in 1..<max_sum_of_factors {
-		var $factors = Set.from_list([1, i])
-
-		for candidate in 2..=i.div_by(2) {
-			partner = i.div_by(candidate)
-			product = candidate * partner
-			if product == i {
-				candidate_factors = match $factors_by_index.get(candidate) {
-					Ok(n) => n
-					Err(OutOfBounds) => crash "unreachable"
-				}
-
-				partner_factors = match $factors_by_index.get(partner) {
-					Ok(n) => n
-					Err(OutOfBounds) => crash "unreachable"
-				}
-
-				$factors = $factors.union(candidate_factors).union(partner_factors)
-			}
-		}
-
-		sum = $factors.iter().sum()
-		if sum >= max_sum_of_factors {
-			return i
-		}
-
-		$factors_by_index = match $factors_by_index.set(i, $factors) {
-			Ok(list) => list
-			Err(OutOfBounds) => crash "unreachable"
-		}
-	}
-
-	max_sum_of_factors
+	solve({ input, presents_multiple, delivery_limit })
 }
 
-Entry : {
-	# the number
-	n : U64,
-	# its factors/divisors
-	factors : Set(U64),
-	# sum of factors
-	sum : U64,
-	# we've found all factors below this number
-	checked : U64,
+InputConfig : {
+	input : U64,
+	presents_multiple : U64,
+	delivery_limit : Try(U64, [None]),
 }
 
-empty_entry : Entry
-empty_entry = { n: 0, factors: Set.empty(), sum: 0, checked: 0 }
-
-multiply_entries : Entry, Entry -> Entry
-multiply_entries = |left, right| {
-	n = left.n * right.n
-	factors = left.factors.union(right.factors)
-	sum = factors.iter().sum()
-	checked = left.n.max(right.n)
-
-	{ n, factors, sum, checked }
-}
-
-third : U64 -> U64
-third = |input| {
-	max_sum_of_factors = input.div_by(10)
-	var $factors_by_index = List.repeat(empty_entry, max_sum_of_factors.max(10))
-
-	# FIXME factors can exist across chunks
-	# need to search downwards in previous chunks or something
-	var $first_chunk = True
-	var $chunk_min = 0
-	var $chunk_max = 10
-	while $chunk_max < max_sum_of_factors or $first_chunk {
-		$first_chunk = False
-		var $chunk_res = Try.Err(None)
-
-		for i in $chunk_min..<$chunk_max {
-			for j in i..<$chunk_max {
-				previous_entry : U64 -> Entry
-				previous_entry = |index| {
-					match $factors_by_index.get(index) {
-						Ok(entry) => entry
-						Err(OutOfBounds) => crash "previous_entry(${index.to_str()})"
-					}
-				}
-
-				i_entry = previous_entry(i)
-				j_entry = previous_entry(j)
-
-				n = i * j
-				if n < $factors_by_index.len() {
-					n_entry = {
-						original_n_entry = match $factors_by_index.get(n) {
-							Ok(entry) => entry
-							Err(OutOfBounds) => crash "future n entry: ${n.to_str()}"
-						}
-
-						factors = original_n_entry.factors.union(Set.from_list([1, n]))
-						{ ..original_n_entry, factors }
-					}
-
-					factors = i_entry.factors.union(j_entry.factors).union(n_entry.factors)
-					sum = factors.iter().sum()
-					checked = i.min(j).max(n_entry.checked)
-					new_entry = { n, factors, sum, checked }
-
-					if sum >= max_sum_of_factors {
-						res = $chunk_res.ok_or(U64.highest).min(n)
-						if res > 0 {
-							$chunk_res = Ok(res)
-						}
-					}
-
-					$factors_by_index = match $factors_by_index.set(n, new_entry) {
-						Ok(arr) => arr
-						Err(OutOfBounds) => crash "$factors_by_index.set(${n.to_str()}, _)"
-					}
-				}
-			}
-		}
-
-		match $chunk_res {
-			Ok(res) => return res
-			Err(None) => {}
-		}
-
-		$chunk_min = $chunk_min + 10
-		$chunk_max = $chunk_max + 10
-	}
-
-	max_sum_of_factors
-}
-
-fourth : U64 -> U64
-fourth = |input| {
-	max_sum_of_factors = input / 10
+solve : InputConfig -> U64
+solve = |{ input, presents_multiple, delivery_limit }| {
+	max_sum_of_factors = input / presents_multiple
 
 	lower_bound : U64
 	lower_bound = {
-		list = List.from_iter(
-			harmonic_series
-				.with_index()
-				.drop_if(|(_index, sum)| sum < max_sum_of_factors)
-				.map(|(index, _sum)| index)
-				.take_first(1),
-		)
+		first_found = harmonic_series
+			.with_index()
+			.drop_if(|(_index, sum)| sum < max_sum_of_factors)
+			.map(|(index, _sum)| index)
+			|> find_first
 
-		match list.first() {
-			Ok(sum) => sum
-			_ => crash "oops"
+		match first_found {
+			Ok(bound) => bound
+			_ => crash "unreachable"
 		}
 	}
 
 	var $sums = List.repeat(0, max_sum_of_factors)
 	var $current_best = max_sum_of_factors
 	for elf in 1..<max_sum_of_factors {
-		if elf > $current_best break
+		if elf > $current_best
+			break
 
 		# first multiple past the lower bound
 		var $house = ((lower_bound + elf - 1) / elf) * elf
+		var $delivered = 0
 
 		while $house < $current_best {
 			sum = $sums.get($house).ok_or(0) + elf
@@ -211,6 +70,11 @@ fourth = |input| {
 				Ok(sums) => sums
 				Err(OutOfBounds) => crash "oops"
 			}
+
+			$delivered = $delivered + 1
+			limit_reached = delivery_limit.map_ok(|l| $delivered >= l).ok_or(False)
+			if limit_reached
+				break
 
 			if sum >= max_sum_of_factors {
 				$current_best = $current_best.min($house)
@@ -223,9 +87,8 @@ fourth = |input| {
 	var $house = 0.U64
 	while $house < $current_best {
 		sum = $sums.get($house).ok_or(0)
-		if sum >= max_sum_of_factors {
+		if sum >= max_sum_of_factors
 			break
-		}
 
 		$house = $house + 1
 	}
@@ -233,6 +96,7 @@ fourth = |input| {
 	$house
 }
 
+harmonic_series : Iter(U64)
 harmonic_series = {
 	start = { sum: 0.U64, n: 0.U64 }
 
@@ -246,24 +110,30 @@ harmonic_series = {
 	Iter.custom(start, Unknown, advance)
 }
 
-expect harmonic_series.take_first(5).collect() == [0, 1, 3, 6, 10]
+expect harmonic_series.take_first(5).collect()
+	== [0, 1, 3, 6, 10]
 
-expect first(10) == 1
-expect first(70) == 4
-expect first(50) == 4
-expect first(120) == 6
+find_first : Iter(item) -> Try(item, [IterWasEmpty])
+find_first = |iterator|
+	match Iter.next(iterator) {
+		Done => Err(IterWasEmpty)
+		One({ item, .. }) => Ok(item)
+		Skip({ rest }) => find_first(rest)
+	}
 
-expect second(10) == 1
-expect second(70) == 4
-expect second(50) == 4
-expect second(120) == 6
+expect {
+	five_to_nine = (0..<10)
+		.iter()
+		.drop_if(|n| n < 5)
 
-expect third(10) == 1
-expect third(70) == 4
-expect third(50) == 4
-expect third(120) == 6
+	find_first(five_to_nine) == Ok(5)
+}
 
-expect fourth(10) == 1
-expect fourth(70) == 4
-expect fourth(50) == 4
-expect fourth(120) == 6
+expect solve_part_one(10) == 1
+expect solve_part_one(70) == 4
+expect solve_part_one(50) == 4
+expect solve_part_one(120) == 6
+
+puzzle_input = 29_000_000.U64
+expect solve_part_one(puzzle_input) == 665280
+expect solve_part_two(puzzle_input) == 705600

@@ -1,10 +1,14 @@
 import "./input.txt" as puzzle_input : Str
 
+Ok(input_program) = Program.parse(puzzle_input)
+
 main! : List(Str) => Try({}, _)
 main! = |_args| {
-	program = Program.parse(puzzle_input)?
+	part_one = Machine.default().run(input_program)
+	echo!("Part One: ${part_one.b.to_str()}\n")
 
-	dbg program
+	part_two = Machine.({ pc: 0, a: 1, b: 0 }).run(input_program)
+	echo!("Part Two: ${part_two.b.to_str()}\n")
 
 	Ok({})
 }
@@ -16,8 +20,6 @@ Program := List(Instruction).{
 			.trim()
 			.split_on("\n")
 			.map_try(Instruction.parse)?
-
-		dbg instructions
 
 		Ok(Program.(instructions))
 	}
@@ -35,6 +37,11 @@ Instruction := [
 
 	parse : Str -> Try(Instruction, _)
 	parse = |line| match line.trim().split_on(" ") {
+		["hlf", r] => {
+			register = Register.parse(r)?
+			Ok(Instruction.(Half(register)))
+		}
+
 		["tpl", r] => {
 			register = Register.parse(r)?
 			Ok(Instruction.(Triple(register)))
@@ -43,11 +50,6 @@ Instruction := [
 		["inc", r] => {
 			register = Register.parse(r)?
 			Ok(Instruction.(Increment(register)))
-		}
-
-		["hlf", r] => {
-			register = Register.parse(r)?
-			Ok(Instruction.(Half(register)))
 		}
 
 		["jmp", o] => {
@@ -69,16 +71,16 @@ Instruction := [
 
 		invalid => Err(InvalidInstruction(invalid))
 	}
-}
 
-expect Instruction.parse("tpl a") == Ok(Instruction.(Triple(A)))
-expect Instruction.parse("tpl b") == Ok(Instruction.(Triple(B)))
-expect Instruction.parse("inc a") == Ok(Instruction.(Increment(A)))
-expect Instruction.parse("hlf a") == Ok(Instruction.(Half(A)))
-expect Instruction.parse("jmp +2") == Ok(Instruction.(Jump(2)))
-expect Instruction.parse("jmp -7") == Ok(Instruction.(Jump(-7)))
-expect Instruction.parse("jie a, +4") == Ok(Instruction.(JumpIfEven(A, 4)))
-expect Instruction.parse("jio a, +8") == Ok(Instruction.(JumpIfOne(A, 8)))
+	expect parse("tpl a") == Ok(Instruction.(Triple(A)))
+	expect parse("tpl b") == Ok(Instruction.(Triple(B)))
+	expect parse("inc a") == Ok(Instruction.(Increment(A)))
+	expect parse("hlf a") == Ok(Instruction.(Half(A)))
+	expect parse("jmp +2") == Ok(Instruction.(Jump(2)))
+	expect parse("jmp -7") == Ok(Instruction.(Jump(-7)))
+	expect parse("jie a, +4") == Ok(Instruction.(JumpIfEven(A, 4)))
+	expect parse("jio a, +8") == Ok(Instruction.(JumpIfOne(A, 8)))
+}
 
 Register := [A, B].{
 	is_eq : _
@@ -103,7 +105,66 @@ Machine := { pc : U64, a : I32, b : I32 }.{
 	default = || Machine.({ pc: 0, a: 0, b: 0 })
 
 	run : Machine, Program -> Machine
-	run = |_machine, _program| {
-		crash "todo"
+	run = |machine, program|
+		match machine.step(program) {
+			Err(Exit(_)) => machine
+			Ok(new_machine) => new_machine.run(program)
+		}
+
+	step : Machine, Program -> Try(Machine, _)
+	step = |Machine.({ pc, a, b }), Program.(instructions)| {
+		instruction = instructions.get(pc) ? Exit
+
+		next = { pc: pc + 1, a, b }
+
+		ok = |registers| Ok(Machine.(registers))
+
+		jump : I32 -> Try(Machine, [Exit([OutOfRange])])
+		jump = |offset| {
+			target = pc.to_i128() + offset.to_i128()
+			new_pc = target.to_u64_try() ? Exit
+
+			ok({ ..next, pc: new_pc })
+		}
+
+		jump_if : Bool, I32 -> Try(Machine, [Exit([OutOfRange])])
+		jump_if = |condition, offset|
+			if condition
+				jump(offset)
+			else
+				Ok(Machine.(next))
+
+		match instruction {
+			Half(A) => ok({ ..next, a: a / 2 })
+			Half(B) => ok({ ..next, b: b / 2 })
+
+			Triple(A) => ok({ ..next, a: a * 3 })
+			Triple(B) => ok({ ..next, b: b * 3 })
+
+			Increment(A) => ok({ ..next, a: a + 1 })
+			Increment(B) => ok({ ..next, b: b + 1 })
+
+			Jump(offset) => jump(offset)
+
+			JumpIfEven(A, offset) => jump_if(a.is_even(), offset)
+			JumpIfEven(B, offset) => jump_if(b.is_even(), offset)
+
+			JumpIfOne(A, offset) => jump_if(a == 1, offset)
+			JumpIfOne(B, offset) => jump_if(b == 1, offset)
+		}
 	}
+}
+
+expect {
+	example =
+		\\inc a
+		\\jio a, +2
+		\\tpl a
+		\\inc a
+
+	program = Program.parse(example)?
+
+	result = Machine.default().run(program)
+
+	result.a == 2
 }

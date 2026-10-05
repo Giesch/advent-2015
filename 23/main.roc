@@ -98,7 +98,7 @@ Register := [A, B].{
 	}
 }
 
-Machine := { pc : U64, a : I32, b : I32 }.{
+Machine := { pc : U64, a : I64, b : I64 }.{
 	is_eq : _
 
 	default : () -> Machine
@@ -119,6 +119,18 @@ Machine := { pc : U64, a : I32, b : I32 }.{
 
 		ok = |registers| Ok(Machine.(registers))
 
+		read : Register -> I64
+		read = |register| match register {
+			A => a
+			B => b
+		}
+
+		write : Register, I64 -> [Ok(Machine)]
+		write = |register, value| match register {
+			A => ok({ ..next, a: value })
+			B => ok({ ..next, b: value })
+		}
+
 		jump : I32 -> Try(Machine, [Exit([OutOfRange])])
 		jump = |offset| {
 			target = pc.to_i128() + offset.to_i128()
@@ -135,22 +147,14 @@ Machine := { pc : U64, a : I32, b : I32 }.{
 				Ok(Machine.(next))
 
 		match instruction {
-			Half(A) => ok({ ..next, a: a / 2 })
-			Half(B) => ok({ ..next, b: b / 2 })
-
-			Triple(A) => ok({ ..next, a: a * 3 })
-			Triple(B) => ok({ ..next, b: b * 3 })
-
-			Increment(A) => ok({ ..next, a: a + 1 })
-			Increment(B) => ok({ ..next, b: b + 1 })
+			Half(register) => write(register, read(register) / 2)
+			Triple(register) => write(register, read(register) * 3)
+			Increment(register) => write(register, read(register) + 1)
 
 			Jump(offset) => jump(offset)
 
-			JumpIfEven(A, offset) => jump_if(a.is_even(), offset)
-			JumpIfEven(B, offset) => jump_if(b.is_even(), offset)
-
-			JumpIfOne(A, offset) => jump_if(a == 1, offset)
-			JumpIfOne(B, offset) => jump_if(b == 1, offset)
+			JumpIfEven(register, offset) => jump_if(read(register).is_even(), offset)
+			JumpIfOne(register, offset) => jump_if(read(register) == 1, offset)
 		}
 	}
 }

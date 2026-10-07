@@ -99,8 +99,6 @@ Register := [A, B].{
 }
 
 Machine := { pc : U64, a : I64, b : I64 }.{
-	is_eq : _
-
 	default : () -> Machine
 	default = || Machine.({ pc: 0, a: 0, b: 0 })
 

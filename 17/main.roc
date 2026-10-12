@@ -1,11 +1,13 @@
 import "./input.txt" as puzzle_input : Str
 
+Ok(parsed_nums) =
+	puzzle_input.trim().split_on("\n").map_try(U8.from_str)
+
 ## The puzzle input, converted into two SIMD vectors
 Buckets : { hi : U8x16, lo : U8x16, len : U64 }
 
 main! : List(Str) => Try({}, _)
 main! = |_args| {
-	Ok(parsed_nums) = parse_lines(puzzle_input)
 	Ok(parsed_buckets) = to_buckets(parsed_nums)
 	{ part_one, part_two } = solve(parsed_buckets)
 
@@ -19,11 +21,15 @@ main! = |_args| {
 # this lets a SIMD lane represent a single input byte from the attempt mask
 powers_of_two = [1, 2, 4, 8, 16, 32, 64, 128]
 
-Ok(weights) = U8x16.from_list(powers_of_two.concat(powers_of_two))
+Ok(weights) =
+	powers_of_two.concat(powers_of_two)
+		|> U8x16.from_list
 
 # a selector for the top half, more significant bits
 # (the input list is little-endian; 255 means 'keep this lane/these bits')
-Ok(upper_half) = U8x16.from_list(List.repeat(0, 8).concat(List.repeat(255, 8)))
+Ok(upper_half) =
+	List.repeat(0, 8).concat(List.repeat(255, 8))
+		|> U8x16.from_list
 
 solve : Buckets -> { part_one : U64, part_two : U64 }
 solve = |buckets| {
@@ -73,14 +79,6 @@ solve = |buckets| {
 	{ part_one: $ways_to_150, part_two: $num_best_ways }
 }
 
-parse_lines : Str -> Try(List(U8), _)
-parse_lines = |input| {
-	input
-		.trim()
-		.split_on("\n")
-		.map_try(|line| U8.from_str(line))
-}
-
 to_buckets : List(U8) -> Try(Buckets, _)
 to_buckets = |nums| {
 	len = nums.len()
@@ -95,13 +93,11 @@ to_buckets = |nums| {
 }
 
 expect {
-	nums = parse_lines(puzzle_input)?
-	buckets = to_buckets(nums)?
+	buckets = to_buckets(parsed_nums)?
 	solve(buckets).part_one == 4372
 }
 
 expect {
-	nums = parse_lines(puzzle_input)?
-	buckets = to_buckets(nums)?
+	buckets = to_buckets(parsed_nums)?
 	solve(buckets).part_two == 4
 }

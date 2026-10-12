@@ -4,13 +4,12 @@ player_hp = 50
 
 player_mana = 500
 
-part_one = solve({ hard_mode: False })
-
-part_two = solve({ hard_mode: True })
-
 main! : List(Str) => Try({}, _)
 main! = |_args| {
+	part_one = solve({ difficulty: Normal })
 	echo!("Part One: ${part_one.to_str()}\n")
+
+	part_two = solve({ difficulty: Hard })
 	echo!("Part Two: ${part_two.to_str()}\n")
 
 	Ok({})
@@ -20,37 +19,30 @@ parse_boss_stats : Str -> Try(Boss, _)
 parse_boss_stats = |input| {
 	lines = input.trim().split_on("\n")
 
+	read_stat_line : U64 -> Try(U64, _)
 	read_stat_line = |i| {
-		line = lines.get(i)?
-		str = line.split_on(": ").get(1)?
-		U64.from_str(str)
+		line = lines.get(i) ?
+			|_| MissingLine(i)
+		stat_str = line.split_on(": ").get(1) ?
+			|_| MalformedLine(i, NoColon)
+		stat = U64.from_str(stat_str) ?
+			|e| MalformedLine(i, e)
+
+		Ok(stat)
 	}
 
-	raw_hp = read_stat_line(0)?
-	hp = raw_hp.to_i64_wrap()
-
+	hp = read_stat_line(0)?
+		.to_i64_wrap()
 	damage = read_stat_line(1)?
 
 	Ok({ hp, damage })
 }
 
-Spell := [
-	MagicMissle,
-	Drain,
-	Shield,
-	Poison,
-	Recharge,
-].{
+Spell := [MagicMissle, Drain, Shield, Poison, Recharge].{
 	is_eq : _
 
 	all : List(Spell)
-	all = [
-		MagicMissle,
-		Drain,
-		Shield,
-		Poison,
-		Recharge,
-	]
+	all = [MagicMissle, Drain, Shield, Poison, Recharge]
 
 	cost : Spell -> U64
 	cost = |spell| match spell {
@@ -85,7 +77,7 @@ Spell := [
 
 Buff : [Shield, Poison, Recharge]
 
-Battle := { player : Player, boss : Boss, hard_mode : Bool }.{
+Battle := { player : Player, boss : Boss, difficulty : Difficulty }.{
 	cast_spell : Battle, Spell -> Battle
 	cast_spell = |Battle.(battle), spell| {
 		spell_damage = spell.damage() ?? 0
@@ -110,11 +102,11 @@ Battle := { player : Player, boss : Boss, hard_mode : Bool }.{
 		)
 
 		boss = {
-			..battle.boss,
-			hp: battle.boss.hp - spell_damage.to_i64_wrap(),
+			hp = battle.boss.hp - spell_damage.to_i64_wrap()
+			{ ..battle.boss, hp }
 		}
 
-		Battle.({ boss, player, hard_mode: battle.hard_mode })
+		Battle.({ ..battle, boss, player })
 	}
 
 	tick_buffs : Battle -> Battle
@@ -142,22 +134,22 @@ Battle := { player : Player, boss : Boss, hard_mode : Bool }.{
 		buff_clocks = { shield, poison, recharge }
 		boss = { ..battle.boss, hp: battle.boss.hp - damage }
 
-		Player.(old_player) = battle.player
-		player = Player.(
-			{
-				..old_player,
-				armor,
-				buff_clocks,
-				mana: battle.player.mana + bonus_mana,
-			},
-		)
+		player = {
+			Player.(old_player) = battle.player
+			mana = battle.player.mana + bonus_mana
+			Player.({ ..old_player, armor, buff_clocks, mana })
+		}
 
-		Battle.({ boss, player, hard_mode: battle.hard_mode })
+		Battle.({ ..battle, boss, player })
 	}
 
 	boss_attack : Battle -> Battle
 	boss_attack = |Battle.(battle)| {
-		effective_damage = (battle.boss.damage.to_i64_wrap() - battle.player.armor.to_i64_wrap()).max(1)
+		effective_damage = {
+			raw_damage = battle.boss.damage.to_i64_wrap()
+			armor = battle.player.armor.to_i64_wrap()
+			(raw_damage - armor).max(1)
+		}
 
 		player = { ..battle.player, hp: battle.player.hp - effective_damage }
 
@@ -165,11 +157,12 @@ Battle := { player : Player, boss : Boss, hard_mode : Bool }.{
 	}
 
 	hard_mode_bleed : Battle -> Battle
-	hard_mode_bleed = |Battle.(battle)| {
-		if !battle.hard_mode return Battle.(battle)
-
-		player = { ..battle.player, hp: battle.player.hp - 1 }
-		Battle.({ ..battle, player })
+	hard_mode_bleed = |Battle.(battle)| match battle.difficulty {
+		Normal => Battle.(battle)
+		Hard => {
+			player = { ..battle.player, hp: battle.player.hp - 1 }
+			Battle.({ ..battle, player })
+		}
 	}
 
 	execute_round : Battle, Spell -> Outcome
@@ -212,7 +205,10 @@ Battle := { player : Player, boss : Boss, hard_mode : Bool }.{
 # a win includes the player's final spent mana
 Outcome : Try(Battle, [Win(Victory), Loss])
 
-Victory : { mana_spent : U64, spells_cast : List(Spell) }
+Victory : {
+	mana_spent : U64,
+	spells_cast : List(Spell),
+}
 
 Boss := { hp : I64, damage : U64 }
 
@@ -251,15 +247,17 @@ Player := {
 			.drop_if(|s| s == Recharge and player.buff_clocks.recharge > 1)
 }
 
-solve : { hard_mode : Bool } -> U64
-solve = |{ hard_mode }| {
-	var $lowest_mana_spend = U64.highest
+Difficulty : [Hard, Normal]
+
+solve : { difficulty : Difficulty } -> U64
+solve = |{ difficulty }| {
+	var $lowest_mana_spent = U64.highest
 
 	var $battles = {
 		Ok(boss) = parse_boss_stats(puzzle_input)
 		player = Player.new
 
-		[Battle.({ player, boss, hard_mode })]
+		[Battle.({ player, boss, difficulty })]
 	}
 
 	while True {
@@ -270,14 +268,12 @@ solve = |{ hard_mode }| {
 
 		var $next_rounds = []
 		for outcome in battle.next_rounds() match outcome {
-			Ok(next) if next.player.spent_mana < $lowest_mana_spend => {
+			Ok(next) if next.player.spent_mana < $lowest_mana_spent => {
 				$next_rounds = $next_rounds.append(next)
 			}
 
-			Err(Win(victory)) if victory.mana_spent < $lowest_mana_spend => {
-				expect victory.mana_spent == victory.spells_cast.iter().map(Spell.cost).sum()
-				$lowest_mana_spend = victory.mana_spent
-				# dbg { victory: victory }
+			Err(Win(victory)) if victory.mana_spent < $lowest_mana_spent => {
+				$lowest_mana_spent = victory.mana_spent
 			}
 
 			_loss_or_worse_win => {}
@@ -292,5 +288,5 @@ solve = |{ hard_mode }| {
 		$battles = existing_rounds.concat($next_rounds)
 	}
 
-	$lowest_mana_spend
+	$lowest_mana_spent
 }

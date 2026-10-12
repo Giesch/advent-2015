@@ -16,10 +16,8 @@ main! = |_args| {
 Program := List(Instruction).{
 	parse : Str -> Try(Program, _)
 	parse = |input| {
-		instructions = input
-			.trim()
-			.split_on("\n")
-			.map_try(Instruction.parse)?
+		lines = input.trim().split_on("\n")
+		instructions = lines.map_try(Instruction.parse)?
 
 		Ok(Program.(instructions))
 	}
@@ -109,13 +107,14 @@ Machine := { pc : U64, a : I64, b : I64 }.{
 			Ok(new_machine) => new_machine.run(program)
 		}
 
-	step : Machine, Program -> Try(Machine, _)
+	step : Machine, Program -> Try(Machine, [Exit(_)])
 	step = |Machine.({ pc, a, b }), Program.(instructions)| {
 		instruction = instructions.get(pc) ? Exit
 
 		next = { pc: pc + 1, a, b }
 
-		ok = |registers| Ok(Machine.(registers))
+		ok = |registers|
+			Ok(Machine.(registers))
 
 		read : Register -> I64
 		read = |register| match register {
@@ -139,10 +138,7 @@ Machine := { pc : U64, a : I64, b : I64 }.{
 
 		jump_if : Bool, I32 -> Try(Machine, [Exit([OutOfRange])])
 		jump_if = |condition, offset|
-			if condition
-				jump(offset)
-			else
-				Ok(Machine.(next))
+			if condition jump(offset) else ok(next)
 
 		match instruction {
 			Half(register) => write(register, read(register) / 2)

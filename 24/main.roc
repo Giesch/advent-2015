@@ -1,0 +1,90 @@
+import "./input.txt" as puzzle_input : Str
+
+main! : List(Str) => Try({}, _)
+main! = |_args| {
+	# TODO leaving off this ? causes a segfault
+	# repro on latest main and file a bug
+	part_one = solve_part_one(parsed_input)?
+	echo!("Part One: ${part_one.to_str()}\n")
+
+	Ok({})
+}
+
+Ok(parsed_input) =
+	puzzle_input.trim().split_on("\n")
+		.map_try(U64.from_str)
+		.map_ok(List.sort_reversed)
+
+expect Set.from_list(parsed_input).len() == parsed_input.len()
+expect parsed_input.sum().is_multiple_of(3)
+
+# FIXME this is still too slow
+solve_part_one : List(U64) -> Try(U64, _)
+solve_part_one = |weights| {
+	per_group = weights.sum() / 3
+
+	# Start with the one option of keeping nothing
+	var $first_variants = Set.single(Set.empty())
+	var $remaining_max = weights.sum()
+
+	for pkg in weights {
+		$remaining_max = $remaining_max - pkg
+
+		var $new_variants = $first_variants
+		for existing_variant in $first_variants {
+			existing_sum = existing_variant.iter().sum()
+			potential_sum = existing_sum + pkg
+			small_enough = potential_sum <= per_group
+			# large_enough = (potential_sum + $remaining_max) >= per_group
+			if small_enough { # and large_enough {
+				$new_variants = $new_variants.insert(existing_variant.insert(pkg))
+			}
+		}
+
+		# keep only the variants under or at the weight limit
+		$first_variants = $new_variants
+			.drop_if(|variant| variant.iter().sum() + $remaining_max < per_group)
+	}
+
+	# keep only the variants that exactly match weight limit
+	$first_variants = $first_variants.keep_if(|v| v.iter().sum() == per_group)
+	min_package_count = $first_variants.iter().map(Set.len).min() ? NoFirstGroup
+	$first_variants = $first_variants.keep_if(|v| v.len() == min_package_count)
+
+	SetWithProduct : { set : Set(U64), product : U64 }
+
+	possible_first_groups : List(SetWithProduct)
+	possible_first_groups = {
+		with_product : Set(U64) -> Try(SetWithProduct, _)
+		with_product = |set| {
+			product = set.iter().product()?
+			Ok({ set, product })
+		}
+
+		$first_variants.iter()
+			.map(with_product)
+			|> List.from_iter
+			.keep_oks(|item| item) # silently drop empties
+			.sort_by(|item| item.product)
+	}
+
+	# skip the rest to debug perf for the first group
+	return Err(FirstPart(possible_first_groups))
+
+	# now, find any solution for splitting the remaining into 2 equal groups
+	# we only care if it exists; so try to find one way to sum to per_group
+	# and exit/continue otherwise
+	for { set: first_group, product: entanglement } in possible_first_groups {
+		expect first_group.iter().sum() == per_group * 2
+
+		_remaining_weights = weights
+			.drop_if(|w| first_group.contains(w))
+
+		can_sum_to_per_group = False
+
+		if can_sum_to_per_group
+			return Ok(entanglement)
+	}
+
+	Err(NoSolution)
+}

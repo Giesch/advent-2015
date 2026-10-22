@@ -8,8 +8,10 @@
 #  5 |    77061  17552253  28094349   6899651   9250759  31663883
 #  6 | 33071741   6796745  25397450  24659492   1534922  27995004
 
-entry6x6 : U64
-entry6x6 = 27995004
+Cell : { row : U64, col : U64, entry : U64 }
+
+cell6x6 : Cell
+cell6x6 = { row: 6, col: 6, entry: 27995004 }
 
 # (row, column) of our desired output cell
 target : (U64, U64)
@@ -23,11 +25,8 @@ main! = |_args| {
 	Ok({})
 }
 
-Cell : { row : U64, col : U64, entry : U64 }
-
 nextCell : Cell -> Cell
 nextCell = |prev| {
-	# TODO LSP incorrectly thinks 'entry' is used when it's renamed in the destructure
 	entry = (prev.entry * 252533).rem_by(33554393)
 
 	(row, col) =
@@ -39,16 +38,15 @@ nextCell = |prev| {
 	{ row, col, entry }
 }
 
-# TODO LSP infers ({}) -> U64 instead of () -> U64
 solvePartOne : () -> U64
 solvePartOne = || {
-	var $currentCell = { row: 6, col: 6, entry: entry6x6 }
+	var $current = cell6x6
 
-	while ($currentCell.row, $currentCell.col) != target {
-		$currentCell = nextCell($currentCell)
+	while ($current.row, $current.col) != target {
+		$current = nextCell($current)
 	}
 
-	$currentCell.entry
+	$current.entry
 }
 
 expect solvePartOne() == 9132360

@@ -61,43 +61,37 @@ Shop := {
 }.{
 	possible_purchases : Shop -> List(List(Item))
 	possible_purchases = |Shop.({ .., required_purchases, items })| {
-		zero_options =
-			if required_purchases.contains(0)
-				[[]]
-			else
-				[]
+		var $options = []
 
-		one_options =
-			if required_purchases.contains(1)
-				items.map(|item| [item])
-			else
-				[]
+		if required_purchases.contains(0) {
+			$options = $options.append([])
+		}
 
-		two_options =
-			if required_purchases.contains(2) {
-				get_unwrap_item = |i| match items.get(i) {
-					Ok(item) => item
-					Err(OutOfBounds) => crash "unreachable"
-				}
+		if required_purchases.contains(1) {
+			$options = $options.concat(items.map(List.single))
+		}
 
-				var $options = []
-				for i in 0..<items.len() {
-					for j in i..<items.len() {
-						first_item = get_unwrap_item(i)
-						second_item = get_unwrap_item(j)
-						$options = $options.append([first_item, second_item])
-					}
-				}
+		if required_purchases.contains(2) {
+			$options = $options.concat(pairs(items))
+		}
 
-				$options
-			} else {
-				[]
-			}
-
-		zero_options
-			.concat(one_options)
-			.concat(two_options)
+		$options
 	}
+}
+
+pairs : List(item) -> List(List(item))
+pairs = |items| {
+	var $pairs = []
+
+	for i in 0..<items.len() {
+		for j in (i + 1)..<items.len() {
+			first = items.get(i) ?? crash "unreachable"
+			second = items.get(j) ?? crash "unreachable"
+			$pairs = $pairs.append([first, second])
+		}
+	}
+
+	$pairs
 }
 
 shops : List(Shop)
@@ -185,9 +179,7 @@ Loadout := List(Item).{
 	can_win = |loadout|
 		match (loadout.turns_to_kill(), loadout.turns_to_die()) {
 			(Ok(ttk), Ok(ttd)) => ttk <= ttd
-			(Ok(_ttk), Err(Never)) => True
-			(Err(Never), Ok(_ttd)) => False
-			(Err(Never), Err(Never)) => False
+			(will_kill, _) => will_kill.is_ok()
 		}
 
 	cost : Loadout -> U64
@@ -216,3 +208,6 @@ all_purchase_options = {
 
 	$all_options
 }
+
+expect part_one.cost() == 91
+expect part_two.cost() == 158

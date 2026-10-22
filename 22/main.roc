@@ -131,11 +131,11 @@ Battle := { player : Player, boss : Boss, difficulty : Difficulty }.{
 			else
 				(0, 0)
 
-		buff_clocks = { shield, poison, recharge }
 		boss = { ..battle.boss, hp: battle.boss.hp - damage }
 
 		player = {
 			Player.(old_player) = battle.player
+			buff_clocks = { shield, poison, recharge }
 			mana = battle.player.mana + bonus_mana
 			Player.({ ..old_player, armor, buff_clocks, mana })
 		}
@@ -186,6 +186,7 @@ Battle := { player : Player, boss : Boss, difficulty : Difficulty }.{
 				mana_spent: battle.player.spent_mana,
 				spells_cast: battle.player.spells_cast,
 			}
+
 			return Err(Win(victory))
 		}
 
@@ -219,11 +220,7 @@ Player := {
 	armor : U64,
 
 	# turns remaining; 0 = none
-	buff_clocks : {
-		shield : U64,
-		poison : U64,
-		recharge : U64,
-	},
+	buff_clocks : { shield : U64, poison : U64, recharge : U64 },
 
 	spells_cast : List(Spell),
 }.{
@@ -279,11 +276,7 @@ solve = |{ difficulty }| {
 			_loss_or_worse_win => {}
 		}
 
-		existing_rounds =
-			if $battles.is_empty()
-				[]
-			else
-				$battles.take_first($battles.len() - 1)
+		existing_rounds = $battles.take_first($battles.len().minus_saturated(1))
 
 		$battles = existing_rounds.concat($next_rounds)
 	}

@@ -98,11 +98,15 @@ solve = |{ input, presents_multiple, delivery_limit }| {
 
 harmonic_series : Iter(U64)
 harmonic_series = {
-	start = { sum: 0.U64, n: 0.U64 }
+	State : { sum : U64, n : U64 }
 
+	start : State
+	start = { sum: 0, n: 0 }
+
+	advance : State -> [Ok((U64, State))]
 	advance = |state| {
-		n = state.n + 1
 		sum = state.sum + state.n
+		n = state.n + 1
 
 		Ok((sum, { sum, n }))
 	}

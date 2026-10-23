@@ -21,7 +21,7 @@ expect parsed_input.sum().is_multiple_of(3)
 # FIXME this is still too slow
 solve_part_one : List(U64) -> Try(U64, _)
 solve_part_one = |weights| {
-	per_group = weights.sum() / 3
+	group_weight = weights.sum() / 3
 
 	# Start with the one option of keeping nothing
 	var $first_variants = Set.single(Set.empty())
@@ -34,8 +34,8 @@ solve_part_one = |weights| {
 		for existing_variant in $first_variants {
 			existing_sum = existing_variant.iter().sum()
 			potential_sum = existing_sum + pkg
-			small_enough = potential_sum <= per_group
-			# large_enough = (potential_sum + $remaining_max) >= per_group
+			small_enough = potential_sum <= group_weight
+			# large_enough = (potential_sum + $remaining_max) >= group_weight
 			if small_enough { # and large_enough {
 				$new_variants = $new_variants.insert(existing_variant.insert(pkg))
 			}
@@ -43,11 +43,11 @@ solve_part_one = |weights| {
 
 		# keep only the variants under or at the weight limit
 		$first_variants = $new_variants
-			.drop_if(|variant| variant.iter().sum() + $remaining_max < per_group)
+			.drop_if(|variant| variant.iter().sum() + $remaining_max < group_weight)
 	}
 
 	# keep only the variants that exactly match weight limit
-	$first_variants = $first_variants.keep_if(|v| v.iter().sum() == per_group)
+	$first_variants = $first_variants.keep_if(|v| v.iter().sum() == group_weight)
 	min_package_count = $first_variants.iter().map(Set.len).min() ? NoFirstGroup
 	$first_variants = $first_variants.keep_if(|v| v.len() == min_package_count)
 
@@ -61,30 +61,37 @@ solve_part_one = |weights| {
 			Ok({ set, product })
 		}
 
-		$first_variants.iter()
-			.map(with_product)
-			|> List.from_iter
-			.keep_oks(|item| item) # silently drop empties
+		$first_variants.to_list()
+			.keep_oks(with_product) # silently drop empties
 			.sort_by(|item| item.product)
 	}
 
-	# skip the rest to debug perf for the first group
-	return Err(FirstPart(possible_first_groups))
+	# # skip the rest to debug perf for the first group
+	# # this succeeds fast enough in a release build
+	# dbg possible_first_groups
+	# Err(FirstPart(possible_first_groups))
 
 	# now, find any solution for splitting the remaining into 2 equal groups
-	# we only care if it exists; so try to find one way to sum to per_group
+	# we only care if it exists; so try to find one way to sum to group_weight
 	# and exit/continue otherwise
 	for { set: first_group, product: entanglement } in possible_first_groups {
-		expect first_group.iter().sum() == per_group * 2
+		expect first_group.iter().sum() == group_weight * 2
 
+		# TODO iterate through all combinations of these,
+		# looking for one that sums to group_weight
 		_remaining_weights = weights
 			.drop_if(|w| first_group.contains(w))
 
-		can_sum_to_per_group = False
+		can_sum_to_group_weight = False
 
-		if can_sum_to_per_group
+		if can_sum_to_group_weight
 			return Ok(entanglement)
 	}
 
 	Err(NoSolution)
+}
+
+powerset : List(item) -> Iter(Set(item))
+powerset = |items| {
+	crash "TODO"
 }

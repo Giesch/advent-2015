@@ -92,6 +92,43 @@ solve_part_one = |weights| {
 }
 
 powerset : List(item) -> Iter(Set(item))
+	where [
+		item.is_eq : item, item -> Bool,
+		item.to_hash : item, Hasher -> Hasher,
+	]
 powerset = |items| {
-	crash "TODO"
+	items.fold(
+		Iter.single(Set.empty()),
+		|subsets, item| {
+			new_subsets = subsets.map(|subset| subset.insert(item))
+			subsets.concat(new_subsets)
+		},
+	)
 }
+
+expect {
+	items : List(U64)
+	items = []
+
+	powerset(items).collect() == [Set.empty()]
+}
+
+expect {
+	subsets : List(Set(U64))
+	subsets = powerset([1, 2, 3]).collect()
+
+	subsets.len() == 8 and Set.from_list(subsets) == Set.from_list([
+		Set.empty(),
+		Set.single(1),
+		Set.single(2),
+		Set.single(3),
+		Set.from_list([1, 2]),
+		Set.from_list([1, 3]),
+		Set.from_list([2, 3]),
+		Set.from_list([1, 2, 3]),
+	])
+}
+
+# check laziness
+expect powerset((0.U64..<65).iter().collect()).take_first(2).collect()
+	== [Set.empty(), Set.single(0)]

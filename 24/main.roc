@@ -66,23 +66,16 @@ solve_part_one = |weights| {
 			.sort_by(|item| item.product)
 	}
 
-	# # skip the rest to debug perf for the first group
-	# # this succeeds fast enough in a release build
-	# dbg possible_first_groups
-	# Err(FirstPart(possible_first_groups))
-
-	# now, find any solution for splitting the remaining into 2 equal groups
-	# we only care if it exists; so try to find one way to sum to group_weight
-	# and exit/continue otherwise
 	for { set: first_group, product: entanglement } in possible_first_groups {
 		expect first_group.iter().sum() == group_weight * 2
 
-		# TODO iterate through all combinations of these,
-		# looking for one that sums to group_weight
-		_remaining_weights = weights
-			.drop_if(|w| first_group.contains(w))
-
-		can_sum_to_group_weight = False
+		remaining_weights = weights.drop_if(|w| first_group.contains(w))
+		can_sum_to_group_weight =
+			remaining_weights
+				|> powerset
+				.keep_if(|set| set.iter().sum() == group_weight)
+				|> find_first
+				.is_ok()
 
 		if can_sum_to_group_weight
 			return Ok(entanglement)
@@ -132,3 +125,11 @@ expect {
 # check laziness
 expect powerset((0.U64..<65).iter().collect()).take_first(2).collect()
 	== [Set.empty(), Set.single(0)]
+
+find_first : Iter(item) -> Try(item, [IterWasEmpty])
+find_first = |iterator|
+	match Iter.next(iterator) {
+		Done => Err(IterWasEmpty)
+		One({ item, .. }) => Ok(item)
+		Skip({ rest }) => find_first(rest)
+	}

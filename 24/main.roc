@@ -18,7 +18,6 @@ Ok(parsed_input) =
 expect Set.from_list(parsed_input).len() == parsed_input.len()
 expect parsed_input.sum().is_multiple_of(3)
 
-# FIXME this is still too slow
 solve_part_one : List(U64) -> Try(U64, _)
 solve_part_one = |weights| {
 	group_weight = weights.sum() / 3
@@ -84,19 +83,20 @@ solve_part_one = |weights| {
 	Err(NoSolution)
 }
 
+item.Eq : where [item.is_eq : item, item -> Bool]
+
+item.Hash : where [item.to_hash : item, Hasher -> Hasher]
+
 powerset : List(item) -> Iter(Set(item))
-	where [
-		item.is_eq : item, item -> Bool,
-		item.to_hash : item, Hasher -> Hasher,
-	]
+	where [item.Eq, item.Hash]
 powerset = |items| {
-	items.fold(
-		Iter.single(Set.empty()),
-		|subsets, item| {
-			new_subsets = subsets.map(|subset| subset.insert(item))
-			subsets.concat(new_subsets)
-		},
-	)
+	with_new_subsets : Iter(Set(item)), item -> Iter(Set(item))
+	with_new_subsets = |subsets, item| {
+		new_subsets = subsets.map(|subset| subset.insert(item))
+		subsets.concat(new_subsets)
+	}
+
+	items.fold(Iter.single(Set.empty()), with_new_subsets)
 }
 
 expect {
@@ -110,7 +110,7 @@ expect {
 	subsets : List(Set(U64))
 	subsets = powerset([1, 2, 3]).collect()
 
-	subsets.len() == 8 and Set.from_list(subsets) == Set.from_list([
+	expected_subsets = [
 		Set.empty(),
 		Set.single(1),
 		Set.single(2),
@@ -119,12 +119,17 @@ expect {
 		Set.from_list([1, 3]),
 		Set.from_list([2, 3]),
 		Set.from_list([1, 2, 3]),
-	])
+	]
+
+	expect subsets.len() == expected_subsets.len()
+
+	Set.from_list(subsets) == Set.from_list(expected_subsets)
 }
 
-# check laziness
-expect powerset((0.U64..<65).iter().collect()).take_first(2).collect()
-	== [Set.empty(), Set.single(0)]
+expect {
+	lazy = powerset((0.U64..<65).iter().collect())
+	lazy.take_first(2).collect() == [Set.empty(), Set.single(0)]
+}
 
 find_first : Iter(item) -> Try(item, [IterWasEmpty])
 find_first = |iterator|

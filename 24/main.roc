@@ -76,7 +76,7 @@ solve_part_one = |weights| {
 				|> find_first
 				.is_ok()
 
-		if can_sum_to_group_weight
+		if (can_sum_to_group_weight)
 			return Ok(entanglement)
 	}
 

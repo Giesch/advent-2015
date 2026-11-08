@@ -114,19 +114,19 @@ Battle := { player : Player, boss : Boss, difficulty : Difficulty }.{
 		old_buffs = battle.player.buff_clocks
 
 		(armor, shield) =
-			if old_buffs.shield > 0
+			if (old_buffs.shield > 0)
 				(7, old_buffs.shield - 1)
 			else
 				(0, 0)
 
 		(damage, poison) =
-			if old_buffs.poison > 0
+			if (old_buffs.poison > 0)
 				(3, old_buffs.poison - 1)
 			else
 				(0, 0)
 
 		(bonus_mana, recharge) =
-			if old_buffs.recharge > 0
+			if (old_buffs.recharge > 0)
 				(101, old_buffs.recharge - 1)
 			else
 				(0, 0)
@@ -190,7 +190,7 @@ Battle := { player : Player, boss : Boss, difficulty : Difficulty }.{
 			return Err(Win(victory))
 		}
 
-		if battle.player.hp <= 0
+		if (battle.player.hp <= 0)
 			return Err(Loss)
 
 		Ok(Battle.(battle))

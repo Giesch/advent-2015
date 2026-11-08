@@ -153,10 +153,10 @@ Loadout := List(Item).{
 
 	turns_to_kill : Loadout -> Try(U64, [Never])
 	turns_to_kill = |Loadout.(items)| {
-		if items.is_empty() return Err(Never)
+		if (items.is_empty()) return Err(Never)
 
 		damage = items.map(|item| item.damage).iter().sum()
-		if boss_stats.armor >= damage return Err(Never)
+		if (boss_stats.armor >= damage) return Err(Never)
 
 		effective_damage = damage - boss_stats.armor
 		ttk = boss_stats.hp.div_ceil_by(effective_damage)
@@ -167,7 +167,7 @@ Loadout := List(Item).{
 	turns_to_die : Loadout -> Try(U64, [Never])
 	turns_to_die = |Loadout.(items)| {
 		armor = items.map(|item| item.armor).iter().sum()
-		if boss_stats.damage <= armor return Err(Never)
+		if (boss_stats.damage <= armor) return Err(Never)
 
 		effective_damage = boss_stats.damage - armor
 		ttd = player_hp.div_ceil_by(effective_damage)

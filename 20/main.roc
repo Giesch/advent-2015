@@ -57,7 +57,7 @@ solve = |{ input, presents_multiple, delivery_limit }| {
 	var $sums = List.repeat(0, max_sum_of_factors)
 	var $current_best = max_sum_of_factors
 	for elf in 1..<max_sum_of_factors {
-		if elf > $current_best
+		if (elf > $current_best)
 			break
 
 		# first multiple past the lower bound
@@ -73,7 +73,7 @@ solve = |{ input, presents_multiple, delivery_limit }| {
 
 			$delivered = $delivered + 1
 			limit_reached = delivery_limit.map_ok(|l| $delivered >= l).ok_or(False)
-			if limit_reached
+			if (limit_reached)
 				break
 
 			if sum >= max_sum_of_factors {
@@ -87,7 +87,7 @@ solve = |{ input, presents_multiple, delivery_limit }| {
 	var $house = 0.U64
 	while $house < $current_best {
 		sum = $sums.get($house).ok_or(0)
-		if sum >= max_sum_of_factors
+		if (sum >= max_sum_of_factors)
 			break
 
 		$house = $house + 1

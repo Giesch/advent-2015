@@ -138,7 +138,8 @@ Machine := { pc : U64, a : I64, b : I64 }.{
 
 		jump_if : Bool, I32 -> Try(Machine, [Exit([OutOfRange])])
 		jump_if = |condition, offset|
-			if (condition) jump(offset) else ok(next)
+			if (condition) jump(offset)
+			else ok(next)
 
 		match instruction {
 			Half(register) => write(register, read(register) / 2)

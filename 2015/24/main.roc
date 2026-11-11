@@ -2,8 +2,6 @@ import "./input.txt" as puzzle_input : Str
 
 main! : List(Str) => Try({}, _)
 main! = |_args| {
-	# TODO leaving off this ? causes a segfault
-	# repro on latest main and file a bug
 	part_one = solve_part_one(parsed_input)?
 	echo!("Part One: ${part_one.to_str()}\n")
 

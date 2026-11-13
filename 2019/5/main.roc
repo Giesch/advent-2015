@@ -18,8 +18,7 @@ main! = |args| {
 }
 
 solve_part_one = |_| {
-	machine = Machine.new(parsed_input, [1])
-	output = machine.run()?
+	output = Machine.new(parsed_input, [1]).run()?
 
 	error_codes = output.drop_last(1)
 	expect error_codes.all(|e| e == 0)
@@ -30,9 +29,7 @@ solve_part_one = |_| {
 }
 
 solve_part_two = |_| {
-	machine = Machine.new(parsed_input, [5])
-	output = machine.run()?
-
+	output = Machine.new(parsed_input, [5]).run()?
 	diagnostic = output.last() ? EmptyOutput
 
 	Ok(diagnostic)
@@ -83,75 +80,65 @@ InstructionHeader := {
 
 	parse : U64 -> Try(InstructionHeader, _)
 	parse = |int| {
-		oc = int.mod_by(100)
-		opcode = OpCode.from_int(oc)?
-
-		first_mode = (int / 100).mod_by(10)
-		second_mode = (int / 1000).mod_by(10)
-		third_mode = (int / 10000).mod_by(10)
-
+		opcode = int.mod_by(100) |> OpCode.from_int()?
 		modes = (
-			ParamMode.parse(first_mode)?,
-			ParamMode.parse(second_mode)?,
-			ParamMode.parse(third_mode)?,
+			(int / 100).mod_by(10) |> ParamMode.parse()?,
+			(int / 1000).mod_by(10) |> ParamMode.parse()?,
+			(int / 10000).mod_by(10) |> ParamMode.parse()?,
 		)
 
 		Ok(InstructionHeader.({ opcode, modes }))
 	}
-}
 
-expect {
-	opcode = Add
-	modes = (Position, Position, Position)
-	expected = InstructionHeader.({ opcode, modes })
-	InstructionHeader.parse(1) == Ok(expected)
-}
+	expect {
+		opcode = Add
+		modes = (Position, Position, Position)
+		expected = InstructionHeader.({ opcode, modes })
+		parse(1) == Ok(expected)
+	}
 
-expect {
-	opcode = Add
-	modes = (Immediate, Position, Position)
-	expected = InstructionHeader.({ opcode, modes })
-	InstructionHeader.parse(101) == Ok(expected)
-}
+	expect {
+		opcode = Add
+		modes = (Immediate, Immediate, Immediate)
+		expected = InstructionHeader.({ opcode, modes })
+		parse(11101) == Ok(expected)
+	}
 
-expect {
-	opcode = Add
-	modes = (Position, Position, Immediate)
-	expected = InstructionHeader.({ opcode, modes })
-	InstructionHeader.parse(10001) == Ok(expected)
+	expect {
+		opcode = Add
+		modes = (Immediate, Position, Position)
+		expected = InstructionHeader.({ opcode, modes })
+		parse(101) == Ok(expected)
+	}
+
+	expect {
+		opcode = Add
+		modes = (Position, Position, Immediate)
+		expected = InstructionHeader.({ opcode, modes })
+		parse(10001) == Ok(expected)
+	}
 }
 
 Param := [Position(U64), Immediate(I64)].{
+	parse : I64, ParamMode -> Try(Param, _)
 	parse = |int, mode| match mode {
-		Position => {
-			pos = int.to_u64_try() ? InvalidPosition
-			Ok(Position(pos))
-		}
-
-		Immediate =>
-			Ok(Immediate(int))
+		Immediate => Ok(Immediate(int))
+		Position => Ok(Position(int.to_u64_try() ? InvalidPosition))
 	}
 
 	resolve : Param, List(I64) -> Try(I64, _)
 	resolve = |param, program| {
 		match param {
 			Immediate(val) => Ok(val)
-			Position(pos) => {
-				val = program.get(pos) ? InvalidAddr
-				Ok(val)
-			}
+			Position(pos) => Ok(program.get(pos) ? InvalidAddr)
 		}
 	}
 }
 
 WriteParam := [Position(U64)].{
-	parse = |int| {
-		pos = int.to_u64_try() ? InvalidPosition
-		Ok(Position(pos))
-	}
+	parse : I64 -> Try(WriteParam, _)
+	parse = |int| Ok(Position(int.to_u64_try() ? InvalidPosition))
 }
-
-ascii_zero = 48.U8
 
 ParamMode := [Position, Immediate].{
 	is_eq : _
@@ -177,6 +164,7 @@ Instruction := [
 ].{
 	parse : List(I64), U64 -> Try(Instruction, _)
 	parse = |program, pc| {
+		header : InstructionHeader
 		header = {
 			instr = program.get(pc) ? InvalidPC
 			h = instr.to_u64_try() ? InvalidOpCode
@@ -184,13 +172,12 @@ Instruction := [
 		}
 
 		get_param_mode : U64 -> Try(ParamMode, _)
-		get_param_mode = |param_pos| {
-			match param_pos {
-				0 => Ok(header.modes.0)
-				1 => Ok(header.modes.1)
-				2 => Ok(header.modes.2)
-				other => Err(InvalidHeaderAccess(other))
-			}
+		get_param_mode = |param_pos| match param_pos {
+			0 => Ok(header.modes.0)
+			1 => Ok(header.modes.1)
+			2 => Ok(header.modes.2)
+
+			other => Err(InvalidHeaderAccess(other))
 		}
 
 		parse_param : U64 -> Try(Param, _)

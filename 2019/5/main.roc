@@ -86,9 +86,9 @@ InstructionHeader := {
 		oc = int.mod_by(100)
 		opcode = OpCode.from_int(oc)?
 
-		first_mode = (int.mod_by(1000) - oc) / 100
-		second_mode = (int.mod_by(10000) - first_mode - oc) / 1000
-		third_mode = (int.mod_by(100000) - second_mode - first_mode - oc) / 10000
+		first_mode = (int / 100).mod_by(10)
+		second_mode = (int / 1000).mod_by(10)
+		third_mode = (int / 10000).mod_by(10)
 
 		modes = (
 			ParamMode.parse(first_mode)?,

@@ -1,10 +1,10 @@
 import "./input.txt" as puzzle_input : Str
 
-parsed_input = parse_input(puzzle_input)
+Ok(parsed_input) = parse_input(puzzle_input)
 
-parse_input : Str -> List(Str)
+parse_input : Str -> Try(List(I64), _)
 parse_input = |input|
-	input.trim().split_on(",")
+	input.trim().split_on(",").map_try(I64.from_str)
 
 main! : List(Str) => Try({}, _)
 main! = |args| {
@@ -49,8 +49,16 @@ OpCode := [
 	Equals,
 	Halt,
 ].{
+	is_eq : _
+
 	parse : Str -> Try(OpCode, _)
-	parse = |str| match U64.from_str(str) ? |_| BadOpCode(str) {
+	parse = |str| {
+		int = U64.from_str(str) ? |_| BadOpCode(str)
+		OpCode.from_int(int)
+	}
+
+	from_int : U64 -> Try(OpCode, _)
+	from_int = |int| match int {
 		1 => Ok(Add)
 		2 => Ok(Multiply)
 		3 => Ok(Input)
@@ -64,21 +72,72 @@ OpCode := [
 
 		other => Err(InvalidOpCode(other))
 	}
+
+}
+
+InstructionHeader := {
+	opcode : OpCode,
+	modes : (ParamMode, ParamMode, ParamMode),
+}.{
+	is_eq : _
+
+	parse : U64 -> Try(InstructionHeader, _)
+	parse = |int| {
+		oc = int.mod_by(100)
+		opcode = OpCode.from_int(oc)?
+
+		first_mode = (int.mod_by(1000) - oc) / 100
+		second_mode = (int.mod_by(10000) - first_mode - oc) / 1000
+		third_mode = (int.mod_by(100000) - second_mode - first_mode - oc) / 10000
+
+		modes = (
+			ParamMode.parse(first_mode)?,
+			ParamMode.parse(second_mode)?,
+			ParamMode.parse(third_mode)?,
+		)
+
+		Ok(InstructionHeader.({ opcode, modes }))
+	}
+}
+
+expect {
+	opcode = Add
+	modes = (Position, Position, Position)
+	expected = InstructionHeader.({ opcode, modes })
+	InstructionHeader.parse(1) == Ok(expected)
+}
+
+expect {
+	opcode = Add
+	modes = (Immediate, Position, Position)
+	expected = InstructionHeader.({ opcode, modes })
+	InstructionHeader.parse(101) == Ok(expected)
+}
+
+expect {
+	opcode = Add
+	modes = (Position, Position, Immediate)
+	expected = InstructionHeader.({ opcode, modes })
+	InstructionHeader.parse(10001) == Ok(expected)
 }
 
 Param := [Position(U64), Immediate(I64)].{
-	parse = |str, mode| match mode {
-		Position => U64.from_str(str).map_ok(|pos| Position(pos))
-		Immediate => I64.from_str(str).map_ok(|val| Immediate(val))
+	parse = |int, mode| match mode {
+		Position => {
+			pos = int.to_u64_try() ? InvalidPosition
+			Ok(Position(pos))
+		}
+
+		Immediate =>
+			Ok(Immediate(int))
 	}
 
-	resolve : Param, List(Str) -> Try(I64, _)
+	resolve : Param, List(I64) -> Try(I64, _)
 	resolve = |param, program| {
 		match param {
 			Immediate(val) => Ok(val)
 			Position(pos) => {
-				str = program.get(pos) ? InvalidAddr
-				val = I64.from_str(str)?
+				val = program.get(pos) ? InvalidAddr
 				Ok(val)
 			}
 		}
@@ -86,13 +145,23 @@ Param := [Position(U64), Immediate(I64)].{
 }
 
 WriteParam := [Position(U64)].{
-	parse = |str| U64.from_str(str).map_ok(|pos| Position(pos))
+	parse = |int| {
+		pos = int.to_u64_try() ? InvalidPosition
+		Ok(Position(pos))
+	}
 }
 
 ascii_zero = 48.U8
 
 ParamMode := [Position, Immediate].{
 	is_eq : _
+
+	parse : U64 -> Try(ParamMode, _)
+	parse = |int| match int {
+		0 => Ok(Position)
+		1 => Ok(Immediate)
+		other => Err(InvalidParamMode(other))
+	}
 }
 
 Instruction := [
@@ -106,31 +175,22 @@ Instruction := [
 	Equals(Param, Param, WriteParam),
 	Halt,
 ].{
-	parse : List(Str), U64 -> Try(Instruction, _)
+	parse : List(I64), U64 -> Try(Instruction, _)
 	parse = |program, pc| {
-		bytes = {
-			str = program.get(pc) ? InvalidPC
-			raw_bytes = str.to_utf8()
-			List.repeat(ascii_zero, 4).concat(raw_bytes)
+		header = {
+			instr = program.get(pc) ? InvalidPC
+			h = instr.to_u64_try() ? InvalidOpCode
+			InstructionHeader.parse(h) ? InvalidHeader
 		}
-
-		leading_chars = bytes.drop_last(2)
 
 		get_param_mode : U64 -> Try(ParamMode, _)
 		get_param_mode = |param_pos| {
-			l = leading_chars.len().to_u64_try()?
-			i = l - (param_pos + 1)
-
-			match leading_chars.get(i) ? InvalidParamAddr {
-				byte if byte == ascii_zero => Ok(Position)
-				byte if byte == ascii_zero + 1 => Ok(Immediate)
-				other => Err(InvalidParamMode(other))
+			match param_pos {
+				0 => Ok(header.modes.0)
+				1 => Ok(header.modes.1)
+				2 => Ok(header.modes.2)
+				other => Err(InvalidHeaderAccess(other))
 			}
-		}
-
-		opcode = {
-			last_two_chars = Str.from_utf8(bytes.take_last(2))?
-			OpCode.parse(last_two_chars)?
 		}
 
 		parse_param : U64 -> Try(Param, _)
@@ -150,7 +210,7 @@ Instruction := [
 			WriteParam.parse(str)
 		}
 
-		match opcode {
+		match header.opcode {
 			Add => {
 				left_param = parse_param(0)?
 				right_param = parse_param(1)?
@@ -225,11 +285,11 @@ Instruction := [
 
 Machine := {
 	pc : U64,
-	program : List(Str),
+	program : List(I64),
 	input : List(I64),
 	output : List(I64),
 }.{
-	new : List(Str), List(I64) -> Machine
+	new : List(I64), List(I64) -> Machine
 	new = |program, input|
 		Machine.({ pc: 0, program, input, output: [] })
 
@@ -261,7 +321,7 @@ Machine := {
 				right = r.resolve(program)?
 				val = left + right
 
-				new_program = program.set(w, val.to_str())?
+				new_program = program.set(w, val)?
 
 				continue({ ..machine, program: new_program })
 			}
@@ -271,7 +331,7 @@ Machine := {
 				right = r.resolve(program)?
 				val = left * right
 
-				new_program = program.set(w, val.to_str())?
+				new_program = program.set(w, val)?
 
 				continue({ ..machine, program: new_program })
 			}
@@ -279,7 +339,7 @@ Machine := {
 			Input(Position(w)) => {
 				val = input.get(0) ? MissingInput
 				new_input = input.drop_first(1)
-				new_program = program.set(w, val.to_str())?
+				new_program = program.set(w, val)?
 
 				continue({ ..machine, program: new_program, input: new_input })
 			}
@@ -308,7 +368,7 @@ Machine := {
 				right = r.resolve(program)?
 				val = if (left < right) 1.I64 else 0
 
-				new_program = program.set(w, val.to_str())?
+				new_program = program.set(w, val)?
 
 				continue({ ..machine, program: new_program })
 			}
@@ -318,7 +378,7 @@ Machine := {
 				right = r.resolve(program)?
 				val = if (left == right) 1.I64 else 0
 
-				new_program = program.set(w, val.to_str())?
+				new_program = program.set(w, val)?
 
 				continue({ ..machine, program: new_program })
 			}

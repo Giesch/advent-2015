@@ -3,6 +3,7 @@ import "./input.txt" as puzzle_input : Str
 Ok(parsed_input) =
 	parse_input(puzzle_input)
 
+parse_input : Str -> Try(List(U64), _)
 parse_input = |input|
 	input.trim().split_on(",").map_try(U64.from_str)
 
@@ -17,6 +18,7 @@ main! = |_args| {
 solve_part_one : () -> Try(U64, _)
 solve_part_one = || {
 	fixed_input = parsed_input.set(1, 12)?.set(2, 2)?
+
 	Machine.new(fixed_input).run()
 }
 
@@ -38,8 +40,8 @@ Machine := {
 
 	step : Machine -> Try([Done(U64), Continue(Machine)], _)
 	step = |Machine.({ pc, program })| {
-		instr_code = program.get(pc) ? InvalidInstruction
-		instruction = Instruction.parse(instr_code) ? InvalidInstruction
+		opcode = program.get(pc)?
+		instruction = Instruction.parse(opcode)?
 
 		read_instruction_line = || {
 			left_addr = program.get(pc + 1)?
@@ -62,15 +64,17 @@ Machine := {
 				}
 
 				Add => {
-					{ left, right, dest } =
-						read_instruction_line() ? InvalidInstructionBody
-					program.set(dest, left + right) ? InvalidDestAddr
+					{ left, right, dest } = read_instruction_line()
+						? InvalidInstructionBody
+					program.set(dest, left + right)
+						? InvalidDestAddr
 				}
 
 				Multiply => {
-					{ left, right, dest } =
-						read_instruction_line() ? InvalidInstructionBody
-					program.set(dest, left * right) ? InvalidDestAddr
+					{ left, right, dest } = read_instruction_line()
+						? InvalidInstructionBody
+					program.set(dest, left * right)
+						? InvalidDestAddr
 				}
 			}
 
@@ -79,12 +83,12 @@ Machine := {
 }
 
 Instruction := [Add, Multiply, Halt].{
-	parse : U64 -> Try(Instruction, [Invalid(U64)])
+	parse : U64 -> Try(Instruction, [InvalidOpCode(U64)])
 	parse = |int| match int {
 		1 => Ok(Add)
 		2 => Ok(Multiply)
 		99 => Ok(Halt)
-		other => Err(Invalid(other))
+		other => Err(InvalidOpCode(other))
 	}
 }
 

@@ -7,9 +7,25 @@ parse_input = |input|
 	input.trim().split_on(",").map_try(I64.from_str)
 
 main! : List(Str) => Try({}, _)
-main! = |_args| {
+main! = |args| {
+	part_one = solve_part_one(args)?
+	echo!("Part One: ${part_one.to_str()}\n")
+
 	Ok({})
 }
+
+solve_part_one : List(Str) -> Try(I64, _)
+solve_part_one = |_| {
+	var $max = I64.lowest
+	for settings in permutations([0.I64, 1, 2, 3, 4]) {
+		output = check_settings({ program: parsed_input, settings })?
+		$max = output.max($max)
+	}
+
+	Ok($max)
+}
+
+expect solve_part_one([]) == Ok(24405)
 
 amp_count = 5.U64
 
@@ -17,18 +33,14 @@ check_settings : { program : List(I64), settings : List(I64) } -> Try(I64, _)
 check_settings = |{ program, settings }| {
 	expect settings.len() == amp_count
 
-	amplifiers = {
-		empty_machine = Machine.new(program, [])
-
-		List.repeat(empty_machine, amp_count)
-			.map2(settings, |machine, setting| { machine, setting })
-	}
+	empty_machine = Machine.new(program, [])
+	amplifiers = List.repeat(empty_machine, amp_count)
+		.map2(settings, |machine, setting| { machine, setting })
 
 	var $input_signal = 0.I64
 	var $current_machine = 0.U64
 	while $current_machine < amplifiers.len() {
-		{ machine, setting } =
-			amplifiers.get($current_machine) ?? crash "oops"
+		{ machine, setting } = amplifiers.get($current_machine) ?? crash "unreachable"
 		input = [setting, $input_signal]
 
 		output = machine.send(input).run()?
@@ -304,6 +316,8 @@ Machine := {
 
 	run : Machine -> Try(List(I64), _)
 	run = |machine| match machine.step() {
+		# TODO change this to make it easy to pause here
+		# Err(MissingInput) => crash "TODO"
 		Err(err) => Err(err)
 		Ok(Done(output)) => Ok(output)
 		Ok(Continue(next_machine)) => next_machine.run()
@@ -348,7 +362,6 @@ Machine := {
 			}
 
 			Input(Position(w)) => {
-				# TODO change this to make it easy to pause here
 				val = input.get(0) ? MissingInput
 				new_input = input.drop_first(1)
 				new_program = program.set(w, val)?

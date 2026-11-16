@@ -91,31 +91,27 @@ InstructionHeader := {
 	}
 
 	expect {
-		opcode = Add
-		modes = (Position, Position, Position)
-		expected = InstructionHeader.({ opcode, modes })
-		parse(1) == Ok(expected)
+		opcode = Add # 01
+		modes = (Position, Position, Position) # 000
+		parse(1) == Ok(InstructionHeader.({ opcode, modes }))
 	}
 
 	expect {
-		opcode = Add
-		modes = (Immediate, Immediate, Immediate)
-		expected = InstructionHeader.({ opcode, modes })
-		parse(11101) == Ok(expected)
+		opcode = Add # 01
+		modes = (Immediate, Immediate, Immediate) # 111
+		parse(11101) == Ok(InstructionHeader.({ opcode, modes }))
 	}
 
 	expect {
-		opcode = Add
-		modes = (Immediate, Position, Position)
-		expected = InstructionHeader.({ opcode, modes })
-		parse(101) == Ok(expected)
+		opcode = Add # 01
+		modes = (Immediate, Position, Position) # 001 right-to-left
+		parse(101) == Ok(InstructionHeader.({ opcode, modes }))
 	}
 
 	expect {
-		opcode = Add
-		modes = (Position, Position, Immediate)
-		expected = InstructionHeader.({ opcode, modes })
-		parse(10001) == Ok(expected)
+		opcode = Add # 01
+		modes = (Position, Position, Immediate) # 100 right-to-left
+		parse(10001) == Ok(InstructionHeader.({ opcode, modes }))
 	}
 }
 
@@ -353,7 +349,7 @@ Machine := {
 			LessThan(l, r, Position(w)) => {
 				left = l.resolve(program)?
 				right = r.resolve(program)?
-				val = if (left < right) 1.I64 else 0
+				val = if (left < right) 1 else 0
 
 				new_program = program.set(w, val)?
 
@@ -363,7 +359,7 @@ Machine := {
 			Equals(l, r, Position(w)) => {
 				left = l.resolve(program)?
 				right = r.resolve(program)?
-				val = if (left == right) 1.I64 else 0
+				val = if (left == right) 1 else 0
 
 				new_program = program.set(w, val)?
 

@@ -407,3 +407,70 @@ Machine := {
 		Machine.({ ..machine, input })
 	}
 }
+
+permutations : List(item) -> Iter(List(item))
+permutations = |list| {
+	next_order : List(U64) -> Try(List(U64), [NoMore])
+	next_order = |order| {
+		len = order.len()
+		if (len < 2)
+			return Err(NoMore)
+
+		at = |i| order.get(i) ?? crash "permutation index out of bounds"
+
+		var $pivot_end = len - 1
+		while $pivot_end > 0 and at($pivot_end - 1) >= at($pivot_end) {
+			$pivot_end = $pivot_end - 1
+		}
+		if ($pivot_end == 0)
+			return Err(NoMore)
+
+		pivot = $pivot_end - 1
+		pivot_value = at(pivot)
+
+		var $successor = len - 1
+		while at($successor) <= pivot_value {
+			$successor = $successor - 1
+		}
+
+		swapped = order.swap(pivot, $successor)
+			?? crash "permutation index out of bounds"
+		{ before, others } = swapped.split_at(pivot + 1)
+
+		Ok(before.concat(others.rev()))
+	}
+
+	first_order : List(U64)
+	first_order = (0.U64).until(list.len()).collect()
+
+	Iter.custom(
+		Ok(first_order),
+		Err(Unknown),
+		|state| {
+			order = state?
+			item = order.map(|i| list.get(i) ?? crash "permutation index out of bounds")
+
+			Ok((item, next_order(order)))
+		},
+	)
+}
+
+expect {
+	items : List(I64)
+	items = []
+
+	permutations(items).collect() == Set.from_list([[]])
+}
+
+expect permutations([1]).collect() == Set.from_list([[1]])
+
+expect permutations([1, 2]).collect() == Set.from_list([[1, 2], [2, 1]])
+
+expect permutations([1, 2, 3]).collect() == Set.from_list([
+	[1, 2, 3],
+	[1, 3, 2],
+	[2, 1, 3],
+	[2, 3, 1],
+	[3, 1, 2],
+	[3, 2, 1],
+])

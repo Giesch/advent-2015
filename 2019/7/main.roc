@@ -13,7 +13,7 @@ main! = |_args| {
 
 amp_count = 5.U64
 
-check_settings : { program : List(I64), settings : List(I64) } -> I64
+check_settings : { program : List(I64), settings : List(I64) } -> Try(I64, _)
 check_settings = |{ program, settings }| {
 	expect settings.len() == amp_count
 
@@ -26,14 +26,39 @@ check_settings = |{ program, settings }| {
 
 	var $input_signal = 0.I64
 	var $current_machine = 0.U64
-	while True {
-		{ machine, setting } = amplifiers.get($current_machine) ?? crash "oops"
+	while $current_machine < amplifiers.len() {
+		{ machine, setting } =
+			amplifiers.get($current_machine) ?? crash "oops"
 		input = [setting, $input_signal]
 
-		# updated_machine = machine.send(input).run()?
+		output = machine.send(input).run()?
+
+		$input_signal = output.get(0) ? EmptyOutput
+		$current_machine = $current_machine + 1
 	}
 
-	crash "TODO"
+	Ok($input_signal)
+}
+
+expect {
+	program = parse_input("3,15,3,16,1002,16,10,16,1,16,15,15,4,15,99,0,0")?
+	settings = [4, 3, 2, 1, 0]
+	expected = 43210
+	check_settings({ program, settings }) == Ok(expected)
+}
+
+expect {
+	program = parse_input("3,23,3,24,1002,24,10,24,1002,23,-1,23,101,5,23,23,1,24,23,23,4,23,99,0,0")?
+	settings = [0, 1, 2, 3, 4]
+	expected = 54321
+	check_settings({ program, settings }) == Ok(expected)
+}
+
+expect {
+	program = parse_input("3,31,3,32,1002,32,10,32,1001,31,-2,31,1007,31,0,33,1002,33,7,33,1,33,31,31,1,32,31,31,4,31,99,0,0,0")?
+	settings = [1, 0, 4, 3, 2]
+	expected = 65210
+	check_settings({ program, settings }) == Ok(expected)
 }
 
 ###############
@@ -284,6 +309,9 @@ Machine := {
 		Ok(Continue(next_machine)) => next_machine.run()
 	}
 
+	# TODO
+	# we need to allow buffering multiple outputs,
+	# and pausing to wait on missing inputs
 	step : Machine -> Try([Done(List(I64)), Continue(Machine)], _)
 	step = |Machine.({ pc, program, input, output } as machine)| {
 		instruction = Instruction.parse(program, pc)?
@@ -320,6 +348,7 @@ Machine := {
 			}
 
 			Input(Position(w)) => {
+				# TODO change this to make it easy to pause here
 				val = input.get(0) ? MissingInput
 				new_input = input.drop_first(1)
 				new_program = program.set(w, val)?

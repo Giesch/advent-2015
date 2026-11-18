@@ -33,8 +33,7 @@ check_settings : { program : List(I64), settings : List(I64) } -> Try(I64, _)
 check_settings = |{ program, settings }| {
 	expect settings.len() == amp_count
 
-	empty_machine = Machine.new(program, [])
-	amplifiers = List.repeat(empty_machine, amp_count)
+	amplifiers = List.repeat(Machine.new(program), amp_count)
 		.map2(settings, |machine, setting| { machine, setting })
 
 	var $input_signal = 0.I64
@@ -43,9 +42,12 @@ check_settings = |{ program, settings }| {
 		{ machine, setting } = amplifiers.get($current_machine) ?? crash "unreachable"
 		input = [setting, $input_signal]
 
-		output = machine.send(input).run()?
+		(_done_machine, done_output) = match machine.send(input).run()? {
+			Done(m) => m.drain()
+			Paused(_) => crash "oops"
+		}
 
-		$input_signal = output.get(0) ? EmptyOutput
+		$input_signal = done_output.get(0) ?? crash "empty output"
 		$current_machine = $current_machine + 1
 	}
 
@@ -71,6 +73,78 @@ expect {
 	settings = [1, 0, 4, 3, 2]
 	expected = 65210
 	check_settings({ program, settings }) == Ok(expected)
+}
+
+check_settings_two : { program : List(I64), settings : List(I64) } -> Try(I64, _)
+check_settings_two = |{ program, settings }| {
+	expect settings.len() == amp_count
+
+	var $amplifiers = List.repeat(Machine.new(program), amp_count)
+		.map2(settings, |machine, setting| { machine, setting })
+
+	# FIRST PASS; same as part one
+	# go through the amps once, including settings with inputs
+	var $input_signal = 0.I64
+	var $current_machine = 0.U64
+	while $current_machine < $amplifiers.len() {
+		{ machine, setting } =
+			$amplifiers.get($current_machine) ?? crash "unreachable"
+		input = [setting, $input_signal]
+
+		(paused_machine, paused_output) = match machine.send(input).run()? {
+			Paused(p) => p.drain()
+			Done(_) => crash "unexpected `Done` on first pass"
+		}
+		$amplifiers = $amplifiers.update(
+			$current_machine,
+			|amp| { ..amp, machine: paused_machine },
+		) ?? crash "unreachable"
+
+		$input_signal = paused_output.get(0) ?? crash "empty output"
+		$current_machine = $current_machine + 1
+	}
+
+	# SUBSEQUENT PASSES - loop through all the amps w/o settings until done
+	$current_machine = 0
+	var $final_output = Err(Uninit)
+	while True {
+		{ machine, .. } = $amplifiers.get($current_machine) ?? crash "unreachable"
+		input = [$input_signal]
+
+		(paused_machine, paused_output) = match machine.send(input).run()? {
+			Paused(p) => p.drain()
+			Done(d) => {
+				(_done_machine, done_output) = d.drain()
+				$final_output = Ok(done_output)
+				break
+			}
+		}
+		$amplifiers = $amplifiers.update(
+			$current_machine,
+			|amp| { ..amp, machine: paused_machine },
+		) ?? crash "unreachable"
+
+		# TODO do we need to handle multiple outputs?
+		# is this expect running? no
+		expect False
+		expect paused_output.len() == 1
+		$input_signal = paused_output.get(0) ?? crash "empty output"
+		$current_machine = ($current_machine + 1).mod_by(amp_count)
+	}
+
+	dbg $final_output
+
+	match $final_output {
+		Err(Uninit) => crash "oops"
+		Ok(final_output) => final_output.get(0)
+	}
+}
+
+expect {
+	program = parse_input("3,26,1001,26,-4,26,3,27,1002,27,2,27,1,27,26,27,4,27,1001,28,-1,28,1005,28,6,99,0,0,5")?
+	settings = [9, 8, 7, 6, 5]
+	expected = 139629729
+	check_settings_two({ program, settings }) == Ok(expected)
 }
 
 ###############
@@ -310,23 +384,19 @@ Machine := {
 	input : List(I64),
 	output : List(I64),
 }.{
-	new : List(I64), List(I64) -> Machine
-	new = |program, input|
-		Machine.({ pc: 0, program, input, output: [] })
+	new : List(I64) -> Machine
+	new = |program|
+		Machine.({ pc: 0, program, input: [], output: [] })
 
-	run : Machine -> Try(List(I64), _)
+	run : Machine -> Try([Done(Machine), Paused(Machine)], _)
 	run = |machine| match machine.step() {
-		# TODO change this to make it easy to pause here
-		# Err(MissingInput) => crash "TODO"
+		Err(MissingInput(_)) => Ok(Paused(machine))
 		Err(err) => Err(err)
-		Ok(Done(output)) => Ok(output)
+		Ok(Done(done_machine)) => Ok(Done(done_machine))
 		Ok(Continue(next_machine)) => next_machine.run()
 	}
 
-	# TODO
-	# we need to allow buffering multiple outputs,
-	# and pausing to wait on missing inputs
-	step : Machine -> Try([Done(List(I64)), Continue(Machine)], _)
+	step : Machine -> Try([Done(Machine), Continue(Machine)], _)
 	step = |Machine.({ pc, program, input, output } as machine)| {
 		instruction = Instruction.parse(program, pc)?
 
@@ -410,15 +480,24 @@ Machine := {
 				continue({ ..machine, program: new_program })
 			}
 
-			Halt => Ok(Done(output))
+			Halt => Ok(Done(Machine.(machine)))
 		}
 	}
 
+	## Give a machine new input, appending to any existing input
 	send : Machine, List(I64) -> Machine
 	send = |Machine.(machine), new_inputs| {
 		input = machine.input.concat(new_inputs)
 		Machine.({ ..machine, input })
 	}
+
+	## Take all of a machine's output
+	drain : Machine -> (Machine, List(I64))
+	drain = |Machine.(machine)|
+		(
+			Machine.({ ..machine, output: [] }),
+			machine.output,
+		)
 }
 
 permutations : List(item) -> Iter(List(item))

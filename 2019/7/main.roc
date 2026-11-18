@@ -11,6 +11,9 @@ main! = |args| {
 	part_one = solve_part_one(args)?
 	echo!("Part One: ${part_one.to_str()}\n")
 
+	part_two = solve_part_two(args)?
+	echo!("Part Two: ${part_two.to_str()}\n")
+
 	Ok({})
 }
 
@@ -149,6 +152,19 @@ expect {
 	expected = 18216
 	check_settings_two({ program, settings }) == Ok(expected)
 }
+
+solve_part_two : List(Str) -> Try(I64, _)
+solve_part_two = |_| {
+	var $max = I64.lowest
+	for settings in permutations([9.I64, 8, 7, 6, 5]) {
+		output = check_settings_two({ program: parsed_input, settings })?
+		$max = output.max($max)
+	}
+
+	Ok($max)
+}
+
+expect solve_part_two([]) == Ok(8271623)
 
 ###############
 

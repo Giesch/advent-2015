@@ -4,7 +4,7 @@ Ok(parsed_input) = parse_input(puzzle_input)
 
 parse_input : Str -> Try(List(I64), _)
 parse_input = |input|
-	input.trim().split_on(",").map_try(I64.from_str)
+	input.trim().replace_each("\n", "").split_on(",").map_try(I64.from_str)
 
 main! : List(Str) => Try({}, _)
 main! = |args| {
@@ -106,44 +106,47 @@ check_settings_two = |{ program, settings }| {
 
 	# SUBSEQUENT PASSES - loop through all the amps w/o settings until done
 	$current_machine = 0
-	var $final_output = Err(Uninit)
+	var $output = []
 	while True {
 		{ machine, .. } = $amplifiers.get($current_machine) ?? crash "unreachable"
+		if (machine.halted()) break
+
 		input = [$input_signal]
 
-		(paused_machine, paused_output) = match machine.send(input).run()? {
+		(updated_machine, output) = match machine.send(input).run()? {
 			Paused(p) => p.drain()
-			Done(d) => {
-				(_done_machine, done_output) = d.drain()
-				$final_output = Ok(done_output)
-				break
-			}
+			Done(d) => d.drain()
 		}
+		$output = output
 		$amplifiers = $amplifiers.update(
 			$current_machine,
-			|amp| { ..amp, machine: paused_machine },
+			|amp| { ..amp, machine: updated_machine },
 		) ?? crash "unreachable"
 
 		# TODO do we need to handle multiple outputs?
-		# is this expect running? no
-		expect False
-		expect paused_output.len() == 1
-		$input_signal = paused_output.get(0) ?? crash "empty output"
+		expect output.len() == 1
+		$input_signal = output.get(0) ?? crash "empty output"
 		$current_machine = ($current_machine + 1).mod_by(amp_count)
 	}
 
-	dbg $final_output
-
-	match $final_output {
-		Err(Uninit) => crash "oops"
-		Ok(final_output) => final_output.get(0)
-	}
+	Ok($output.get(0) ?? crash "empty final output")
 }
 
 expect {
 	program = parse_input("3,26,1001,26,-4,26,3,27,1002,27,2,27,1,27,26,27,4,27,1001,28,-1,28,1005,28,6,99,0,0,5")?
 	settings = [9, 8, 7, 6, 5]
 	expected = 139629729
+	check_settings_two({ program, settings }) == Ok(expected)
+}
+
+expect {
+	program = parse_input(
+		\\3,52,1001,52,-5,52,3,53,1,52,56,54,1007,54,5,55,1005,55,26,1001,54,
+		\\-5,54,1105,1,12,1,53,54,53,1008,54,0,55,1001,55,1,55,2,53,55,53,4,
+		\\53,1001,56,-1,56,1005,56,6,99,0,0,0,0,10
+	)?
+	settings = [9, 7, 8, 5, 6]
+	expected = 18216
 	check_settings_two({ program, settings }) == Ok(expected)
 }
 
@@ -383,10 +386,14 @@ Machine := {
 	program : List(I64),
 	input : List(I64),
 	output : List(I64),
+	halted : Bool,
 }.{
 	new : List(I64) -> Machine
 	new = |program|
-		Machine.({ pc: 0, program, input: [], output: [] })
+		Machine.({ pc: 0, program, input: [], output: [], halted: False })
+
+	halted : Machine -> Bool
+	halted = |Machine.(machine)| machine.halted
 
 	run : Machine -> Try([Done(Machine), Paused(Machine)], _)
 	run = |machine| match machine.step() {
@@ -397,7 +404,7 @@ Machine := {
 	}
 
 	step : Machine -> Try([Done(Machine), Continue(Machine)], _)
-	step = |Machine.({ pc, program, input, output } as machine)| {
+	step = |Machine.({ pc, program, input, output, .. } as machine)| {
 		instruction = Instruction.parse(program, pc)?
 
 		continue = |properties| {
@@ -480,12 +487,12 @@ Machine := {
 				continue({ ..machine, program: new_program })
 			}
 
-			Halt => Ok(Done(Machine.(machine)))
+			Halt => Ok(Done(Machine.({ ..machine, halted: True })))
 		}
 	}
 
 	## Give a machine new input, appending to any existing input
-	send : Machine, List(I64) -> Machine
+
 	send = |Machine.(machine), new_inputs| {
 		input = machine.input.concat(new_inputs)
 		Machine.({ ..machine, input })
